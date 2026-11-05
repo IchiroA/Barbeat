@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barbeat · Help</title>
+  <meta name="description" content="Barbeat turns your Mac's menu bar and screen edges into a light show that moves with your music and takes its colors from what's on screen.">
+  <meta property="og:title" content="Barbeat">
+  <meta property="og:description" content="A light show in your Mac's menu bar that moves with your music and takes its colors from what's on screen.">
+  <meta property="og:image" content="images/hero.jpg">
+  <link rel="icon" href="images/icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="images/icon.png" alt="" width="28" height="28">Barbeat</a>
+    <nav aria-label="Sections">
+      <a href="#screen-colors">Screen colors</a>
+      <a class="optional" href="#start">Quick start</a>
+      <a class="optional" href="#styles">Styles</a>
+      <a class="optional" href="#settings">Settings</a>
+      <a class="optional" href="#lights">Lights</a>
+      <a href="#help">Help</a>
+      <a href="#support">Support</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <div class="hero wrap">
+    <img class="icon" src="images/icon.png" alt="Barbeat app icon" width="96" height="96">
+    <h1>Your screen's light,<br><span class="gradient-text">dancing in the menu bar.</span></h1>
+    <p class="lede">Barbeat turns your Mac's menu bar and the edges of your screen into a light show. It moves with whatever your Mac is playing, and it takes its colors from what's on screen, right down to the stage lights in a concert video.</p>
+    <div class="buttons">
+      <a class="button primary" href="https://github.com/IchiroA/Barbeat/releases/latest">Download for Mac</a>
+      <a class="button" href="https://github.com/IchiroA/Barbeat">View on GitHub</a>
+    </div>
+    <p class="fine">Free and open source · Apple Silicon (M1 or newer) · macOS 14.2 or later · Signed and notarized by Apple</p>
+    <figure>
+      <div class="shot glow"><img src="images/hero.jpg" alt="A concert stage lit magenta on the left, violet and blue in the middle and cyan on the right. Barbeat's bars in the menu bar take the same colors as the lights below them." width="2000" height="1292"></div>
+      <figcaption>Screen › Ambient light: every bar in the menu bar takes the color of the picture right below it.</figcaption>
+    </figure>
+  </div>
+
+  <section id="screen-colors" class="first">
+    <div class="wrap">
+      <div class="feature-head">
+        <span class="eyebrow gradient-text">Screen colors</span>
+        <h2>The light from your screen, spilling over.</h2>
+        <p class="lead">Choose <strong>Screen</strong> under Colors and Barbeat watches what you're watching. The menu bar and the screen edges glow in the picture's own colors, spot by spot, as it changes.</p>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <span class="tag">Ambient light</span>
+          <h4>Each spot matches the picture next to it</h4>
+          <p class="muted">Every part of the menu bar and the edge glow takes the color of the screen right beside it, like backlighting behind a TV. A magenta spotlight on the left lights the left of the menu bar magenta; a cyan wash on the right turns the right side cyan.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Main colors</span>
+          <h4>The picture's strongest colors, as a palette</h4>
+          <p class="muted">Barbeat picks the strongest colors on screen and paints the bars with them, fading smoothly as the picture changes. A good fit for styles that color by frequency.</p>
+        </div>
+      </div>
+
+      <figure class="shot" style="margin-top: 28px;">
+        <img src="images/ambient-closeup.jpg" alt="Close-up of the menu bar around the notch: violet bars above a violet spotlight on the left, blue bars beside the notch above a blue spotlight." width="3008" height="600">
+      </figure>
+      <figcaption>Close-up: violet bars above the violet spotlight, blue ones next to the notch above the blue light.</figcaption>
+
+      <h3>Follow light beams</h3>
+      <p class="prose muted">When a laser fan, a sweeping stage beam or a strobe hits the picture, Barbeat sees it the moment it appears and pours that light's own color into the menu bar and the edge glow beside it. The glow lights up even while the music is quiet, then fades over half a second, so sweeping beams leave a trail.</p>
+      <div class="pair">
+        <figure>
+          <img src="images/beam-before.jpg" alt="The top right corner of the screen: the menu bar bars are cyan, matching the cyan stage wash." width="1000" height="560">
+          <figcaption><strong>Before:</strong> the top right corner glows cyan with the stage wash.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/beam-after.jpg" alt="The same corner a moment later: a green laser fan fires from the top right, and the menu bar and the glow below it turn green." width="1000" height="560">
+          <figcaption><strong>The laser fires:</strong> its green floods the menu bar and the glow next to it.</figcaption>
+        </figure>
+      </div>
+      <p class="prose muted" style="margin-top: 18px;">Barbeat only counts light that stands well above the rest of the picture and has just appeared or moved. Steady bright things, like a white window or captions, fade into the background within a few seconds. <strong>Strength</strong> sets how much of the glow a beam takes over. In Main colors, beams tint the brightest colors instead.</p>
+
+      <div class="facts">
+        <div class="fact"><strong>Light on the Mac</strong><span>Tiny frames, 192 pixels wide: up to 6 a second, 15 while following beams (10 on battery). About a third of a millisecond of work each.</span></div>
+        <div class="fact"><strong>Nothing is recorded</strong><span>Frames are read live, turned into colors and thrown away. Nothing is saved or sent anywhere.</span></div>
+        <div class="fact"><strong>Follows your app</strong><span>Listening to one app? Barbeat watches that app's window instead of the whole screen.</span></div>
+        <div class="fact"><strong>Never chases itself</strong><span>Barbeat's own windows are left out, so its glow doesn't feed back into its colors.</span></div>
+      </div>
+      <p class="note">Screen colors need Screen Recording permission, and macOS shows its recording icon in the menu bar while they're on. Copy-protected video (some streaming apps) looks black to every app, so Barbeat keeps the last colors until the picture comes back.</p>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Quick start</span>
+      <h2>Up and running in a minute</h2>
+      <ol class="steps prose">
+        <li><strong>Download and install.</strong><p>Get <code>Barbeat-&lt;version&gt;.zip</code> from the <a href="https://github.com/IchiroA/Barbeat/releases/latest">download page</a>, unzip it and drag <strong>Barbeat</strong> into your Applications folder.</p></li>
+        <li><strong>Open it.</strong><p>macOS checks that you want to open an app from the internet: click Open. A bar-chart icon appears in the menu bar. Barbeat has no Dock icon.</p></li>
+        <li><strong>Allow system audio.</strong><p>macOS asks to let Barbeat record system audio: click Allow. Barbeat only listens so it can animate; nothing is recorded or saved.</p></li>
+        <li><strong>Allow the screen, for Screen colors.</strong><p>macOS also asks to let Barbeat record the screen. Allow it to have the colors follow what's on screen (if macOS offers Quit &amp; Reopen, click it). Without it, pick any other palette.</p></li>
+        <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars in Ambient light colors and a deep glow around the screen. Click the bar-chart icon to change anything; changes apply instantly and are remembered.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="styles">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Styles</span>
+      <h2>Ten ways to see the music</h2>
+      <p class="lead">Pick a style under <strong>Style</strong>. In Stereo layout the left channel plays left of the notch and the right channel to the right, with the bass hugging the notch. These pictures show the right half, starting at the notch.</p>
+      <div class="styles">
+        <div class="style"><div><h4>LED</h4><p>Segmented bars, like a hardware equalizer.</p></div><img src="images/styles/led.jpg" alt="LED style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Bars</h4><p>Solid bars.</p></div><img src="images/styles/bars.jpg" alt="Bars style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Center</h4><p>Bars that grow from the middle. The default.</p></div><img src="images/styles/center.jpg" alt="Center style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Glow</h4><p>A soft color wash that lights up with each frequency.</p></div><img src="images/styles/glow.jpg" alt="Glow style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Pulse</h4><p>The whole menu bar's color pulses with the beat.</p></div><img src="images/styles/pulse.jpg" alt="Pulse style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>VU</h4><p>A stereo level meter shooting out of the notch.</p></div><img src="images/styles/vu.jpg" alt="VU style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Aura</h4><p>Light hugging the notch that flares with the bass.</p></div><img src="images/styles/aura.jpg" alt="Aura style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Waterfall</h4><p>The last few seconds of music flowing out across the menu bar.</p></div><img src="images/styles/waterfall.jpg" alt="Waterfall style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Scope</h4><p>A live waveform, like an oscilloscope.</p></div><img src="images/styles/scope.jpg" alt="Scope style" width="1520" height="98" loading="lazy"></div>
+        <div class="style"><div><h4>Sparks</h4><p>Sparks shoot out of the notch on every beat.</p></div><img src="images/styles/sparks.jpg" alt="Sparks style" width="1520" height="98" loading="lazy"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settings">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Settings</span>
+      <h2>Everything in the panel</h2>
+      <p class="lead">Click the bar-chart icon in the menu bar. The switch at the top turns the whole show on or off.</p>
+      <div class="settings">
+        <div class="panel"><img src="images/panel.png" alt="The Barbeat settings panel" width="640" height="2950" loading="lazy"></div>
+        <div>
+          <p class="group-title">Sound</p>
+          <dl>
+            <dt>Listen to</dt>
+            <dd><strong>System</strong> is everything your Mac plays. <strong>One App</strong> listens to a single app, say Spotify or Safari, so calls and alerts don't move the bars. <strong>Input</strong> uses a microphone or audio interface; macOS asks for microphone access the first time. If that input is unplugged, Barbeat listens to system audio until it's back.</dd>
+            <dt>Sensitivity, Auto level</dt>
+            <dd>Auto level adjusts to how loud the music is, so the bars always fill the menu bar. Sensitivity makes everything react more or less on top of that.</dd>
+            <dt>Low · Mid · High</dt>
+            <dd>Boost or calm the bass, mids or treble on their own. <strong>Reset Tuning</strong> puts these, Brightness and Spark power back to the starting values.</dd>
+          </dl>
+
+          <p class="group-title">Look</p>
+          <dl>
+            <dt>Style, Layout, Bands</dt>
+            <dd>The ten styles above. <strong>Stereo L | R</strong> splits left and right around the notch; <strong>Full width</strong> spreads both channels together across the whole bar. Bands sets how many bars (16 to 128).</dd>
+            <dt>Colors</dt>
+            <dd>Classic, Spectrum, Neon, Fire, Ice, White, Accent (your Mac's accent color), Wallpaper (picked from your desktop picture), <a href="#screen-colors">Screen</a> and Custom. <strong>Customize</strong> copies any palette into Custom, where you set four colors, by frequency or by bar height, with Shuffle, colors from your wallpaper and four preset slots.</dd>
+            <dt>Color drift</dt>
+            <dd>Slowly turns any palette around the color wheel.</dd>
+            <dt>Opacity, Brightness</dt>
+            <dd>How see-through the bars are, and how strong the glow and colors are.</dd>
+            <dt>Peak hold</dt>
+            <dd>Little caps that hang at each bar's latest peak (LED, Bars, Center and VU).</dd>
+            <dt>Keep menu bar text readable</dt>
+            <dd>Tones down bar colors bright enough to wash out the menu bar's own text and icons, like white bars behind white text. Reds, blues and purples stay as they are, and the edge glow keeps its full colors.</dd>
+          </dl>
+
+          <p class="group-title">Screen</p>
+          <dl>
+            <dt>Screen edge glow</dt>
+            <dd>A soft glow along the left, right and bottom edges of the screen. <strong>Depth</strong> sets how far it reaches in (up to a third of the screen). <strong>Top edge too</strong> adds the top, just below the menu bar.</dd>
+            <dt>Show on all displays</dt>
+            <dd>Draws on every screen, or just the main one.</dd>
+            <dt>Show over full-screen apps</dt>
+            <dd>Keeps the edge glow on all four sides while an app is in full screen. Turn on <strong>Menu bar visuals too</strong> to also draw the bars where the hidden menu bar would be; they step aside whenever you use the menu bar.</dd>
+            <dt>Launch at login</dt>
+            <dd>Starts Barbeat when you log in.</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="lights">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Lights</span>
+      <h2>Take the show into the room</h2>
+      <p class="lead">Barbeat can drive Philips Hue lights and Art-Net devices, like WLED LED strips and DMX fixtures, in the same colors as the menu bar, including Screen colors. Lights have their own switch, so Barbeat also works as a lights-only controller.</p>
+      <div class="cards" style="margin-top: 28px;">
+        <div class="card">
+          <h4>Philips Hue</h4>
+          <ol class="muted">
+            <li>In the Hue app, make an <strong>Entertainment area</strong> with the lights you want.</li>
+            <li>In Barbeat's panel, click <strong>Set Up…</strong> next to Lights, then <strong>Add Hue Bridge</strong>.</li>
+            <li>Pick your bridge (or type its IP address), click <strong>Pair</strong> and press the round button on top of the bridge.</li>
+            <li>Choose the Entertainment area. <strong>Identify</strong> blinks its lights one by one.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h4>WLED and Art-Net</h4>
+          <ol class="muted">
+            <li>Click <strong>Add Art-Net Device</strong>.</li>
+            <li><strong>Find Nodes</strong> lists devices on your network, or add one by IP address.</li>
+            <li>For a WLED strip, <strong>Detect WLED</strong> fills in its name, LED count and settings.</li>
+            <li>Choose what happens <strong>When Barbeat stops</strong>: hand back to WLED's own effect, fade to black, or hold the last color.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="prose" style="margin-top: 28px;">
+        <dl>
+          <dt>Mode</dt>
+          <dd><strong>Auto</strong> picks for each device: <strong>Pulse</strong> for one light, <strong>Stereo</strong> for two, <strong>Bands</strong> for three to nine (a room-sized equalizer, bass on the left), and <strong>Mirror</strong> for strips, which copy the menu bar at the same spot.</dd>
+          <dt>Base glow, Beat flash, Brightness, Delay</dt>
+          <dd>How much the lights glow between beats, how hard they flash, how bright they get, and a delay for AirPlay or Bluetooth speakers that play late.</dd>
+          <dt>Each device's switch</dt>
+          <dd>Every Hue Bridge and Art-Net device has its own on/off switch in the Lights window. Switch one off to leave those lights alone for now (Hue lights go back to how they were) while the others keep playing. It stays set up for next time.</dd>
+          <dt>Give back after</dt>
+          <dd>When the music stops (10 s, 30 s, 2 min or never), when you turn Lights or a device off, quit or the Mac sleeps, Hue lights go back to exactly how they were before: on or off, brightness, color and scene.</dd>
+        </dl>
+        <p class="muted">Lights never flash more than three times a second. With Reduce motion turned on in macOS, flashes are halved. The first time, macOS asks for Local Network permission.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="help">
+    <div class="wrap prose">
+      <span class="eyebrow gradient-text">Help</span>
+      <h2>If something's off</h2>
+      <details>
+        <summary>The bars don't move</summary>
+        <div><p>Open System Settings › Privacy &amp; Security › Screen &amp; System Audio Recording and make sure Barbeat is turned on. Then click <strong>Try Again</strong> in Barbeat's panel. If you chose One App, check that the app is actually playing sound.</p></div>
+      </details>
+      <details>
+        <summary>Screen colors stay gray or say "needs permission"</summary>
+        <div><p>Allow Barbeat under Privacy &amp; Security › Screen &amp; System Audio Recording (in the screen recording list), then click Try Again. macOS sometimes needs Barbeat to reopen before the permission takes effect.</p></div>
+      </details>
+      <details>
+        <summary>The colors freeze while I watch a streaming service</summary>
+        <div><p>Copy-protected video looks black to every app that reads the screen, so Barbeat keeps the last colors and picks up again as soon as the picture can be read. The music still moves the bars as usual.</p></div>
+      </details>
+      <details>
+        <summary>The menu bar is hard to read</summary>
+        <div><p>Turn on <strong>Keep menu bar text readable</strong>. You can also lower Opacity or Brightness, or try a calmer style like Glow or Pulse.</p></div>
+      </details>
+      <details>
+        <summary>Nothing shows in the menu bar when an app is in full screen</summary>
+        <div><p>By default full screen shows just the edge glow. Turn on <strong>Menu bar visuals too</strong> under Show over full-screen apps to also see the bars at the top.</p></div>
+      </details>
+      <details>
+        <summary>The panel says "No visible menu bar"</summary>
+        <div><p>Your menu bar is set to hide automatically, so there's nothing to draw behind. Change "Automatically hide and show the menu bar" in System Settings. The edge glow keeps working either way.</p></div>
+      </details>
+      <details>
+        <summary>Does it use much battery?</summary>
+        <div><p>The drawing runs on the graphics chip. On battery Barbeat draws at 30 frames a second instead of 60, and it stops drawing whenever it's silent. To save more, turn off Screen edge glow or Follow light beams, or flip the switch at the top of the panel.</p></div>
+      </details>
+      <details>
+        <summary>My Bluetooth headset sounds worse</summary>
+        <div><p>Listening to a Bluetooth headset's microphone switches it into call mode, which lowers the sound quality. Choose System or One App under Listen to instead.</p></div>
+      </details>
+      <details>
+        <summary>How do I uninstall it?</summary>
+        <div>
+          <p>Click <strong>Quit Barbeat</strong> at the bottom of the panel and drag Barbeat from Applications to the Trash. Any Hue lights it was using are put back first.</p>
+          <p>To also remove its settings, run <code>defaults delete com.ia.MenuBarEQ</code> in Terminal. Hue pairing keys are in your keychain under <code>com.ia.MenuBarEQ.hue</code>.</p>
+        </div>
+      </details>
+      <p class="muted" style="margin-top: 22px;">Still stuck, or found a bug? <a href="https://github.com/IchiroA/Barbeat/issues">Open an issue on GitHub</a>.</p>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap prose">
+      <span class="eyebrow gradient-text">Privacy</span>
+      <h2>Nothing leaves your Mac</h2>
+      <p class="muted">Barbeat doesn't collect anything: no accounts, no analytics, no ads. Sound and screen frames are analyzed live in memory and never recorded, saved or sent. The only network traffic is to lights you set up yourself on your own network. Read the full <a href="privacy.html">privacy policy</a>.</p>
+    </div>
+  </section>
+
+  <section id="support" class="support">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Support</span>
+      <h2>Enjoying Barbeat? <span class="heart">♥</span></h2>
+      <p class="lead">Barbeat is free and open source, made by one person. If it makes your music a little brighter, you can help keep it going.</p>
+      <div class="buttons">
+        <!-- Tip link: put your Ko-fi page here and remove "hidden". -->
+        <a class="button primary" id="tip" href="#" hidden>Leave a tip</a>
+        <a class="button" href="https://github.com/IchiroA/Barbeat">Star it on GitHub</a>
+        <a class="button" href="https://github.com/IchiroA/Barbeat/issues">Report a bug or idea</a>
+      </div>
+      <p class="muted" style="margin-top: 18px;">Telling a friend who loves music helps too.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Ichiro Ashihara (@IchiroA) · Open source under the MIT License</span>
+    <nav aria-label="Footer">
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/IchiroA/Barbeat">GitHub</a>
+      <a href="https://github.com/IchiroA/Barbeat/releases/latest">Download</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

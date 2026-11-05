@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barbeat · Privacy</title>
+  <meta name="description" content="Barbeat's privacy policy: it collects no data. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent.">
+  <link rel="icon" href="images/icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="images/icon.png" alt="" width="28" height="28">Barbeat</a>
+    <nav aria-label="Sections">
+      <a href="index.html#screen-colors">Screen colors</a>
+      <a class="optional" href="index.html#start">Quick start</a>
+      <a href="index.html#help">Help</a>
+      <a href="index.html#support">Support</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap prose">
+    <h1>Privacy policy</h1>
+    <p class="muted">Effective November 4, 2026</p>
+
+    <div class="summary-box">
+      <p><strong>Barbeat collects no data.</strong> There are no accounts, analytics, ads or tracking. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent anywhere. The only network traffic goes to lights you set up yourself, on your own network.</p>
+    </div>
+
+    <h2>Sound</h2>
+    <p>To animate the menu bar, Barbeat listens to what your Mac plays (all of it, or one app you choose) or to an audio input you pick, such as a microphone. The sound is turned into levels for the bars as it plays and then discarded. It is never recorded, saved or sent. macOS asks your permission first, and you can turn it off anytime under System Settings › Privacy &amp; Security.</p>
+
+    <h2>Screen</h2>
+    <p>If you choose Screen colors, Barbeat reads small frames of your screen (192 pixels wide, a few to 15 a second) to work out their colors, or only the window of the app you're listening to. Each frame is analyzed in memory and thrown away; none are saved or sent. Barbeat's own windows are left out. macOS asks your permission first and shows its recording icon in the menu bar while this is on.</p>
+
+    <h2>Desktop picture</h2>
+    <p>The Wallpaper colors and the "From Wallpaper" button read your current desktop picture on your Mac to pick a few colors. The picture isn't copied, saved or sent.</p>
+
+    <h2>Lights</h2>
+    <p>If you set up lights, Barbeat talks to your Philips Hue Bridge and Art-Net devices (such as WLED) directly over your local network. To find a Hue Bridge, it looks on your local network and may also ask Philips' public discovery service (<code>discovery.meethue.com</code>), which lists bridges registered from your internet connection. That request includes no information about you beyond what any web request does (your IP address); Philips' own privacy policy covers it. macOS asks for Local Network permission the first time.</p>
+
+    <h2>What's stored on your Mac</h2>
+    <ul>
+      <li>Your settings, in macOS's preferences for Barbeat.</li>
+      <li>Hue pairing keys, in your login keychain.</li>
+      <li>While Barbeat controls Hue lights: a note of how the lights were set, in Barbeat's Application Support folder, so they can be put back even after a crash. It's removed once they're restored.</li>
+    </ul>
+    <p>Nothing is stored anywhere else, and Barbeat doesn't check for updates or contact any server of its own.</p>
+
+    <h2>Children</h2>
+    <p>Barbeat collects no information from anyone, including children.</p>
+
+    <h2>Changes and contact</h2>
+    <p>If this policy changes, the new version will be posted on this page with a new date. Questions? Open an issue on <a href="https://github.com/IchiroA/Barbeat/issues">GitHub</a>.</p>
+    <p class="muted">Barbeat is made by Ichiro Ashihara (@IchiroA).</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Ichiro Ashihara (@IchiroA) · Open source under the MIT License</span>
+    <nav aria-label="Footer">
+      <a href="index.html">Help</a>
+      <a href="https://github.com/IchiroA/Barbeat">GitHub</a>
+      <a href="https://github.com/IchiroA/Barbeat/releases/latest">Download</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

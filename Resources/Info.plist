@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Barbeat</string>
+	<key>CFBundleExecutable</key>
+	<string>Barbeat</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.ia.MenuBarEQ</string>
+	<key>CFBundleName</key>
+	<string>Barbeat</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.10</string>
+	<key>CFBundleVersion</key>
+	<string>13</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.2</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Barbeat listens to the sound your Mac is playing so it can animate the menu bar. Audio is analyzed live and never recorded or saved.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_hue._tcp</string>
+	</array>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Ichiro Ashihara (@IchiroA). MIT License.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Barbeat talks to your Hue Bridge and Art-Net lights on your local network so they can light up with the music.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Barbeat can listen to a microphone or other audio input you pick, so the menu bar reacts to live sound. Audio is analyzed live and never recorded or saved.</string>
+</dict>
+</plist>

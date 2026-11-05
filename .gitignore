@@ -1,0 +1,11 @@
+# Build output
+.build/
+build/
+*.zip
+.swiftpm/
+DerivedData/
+xcuserdata/
+
+# macOS and editors
+.DS_Store
+.claude/

@@ -1,0 +1,37 @@
+Barbeat
+=======
+
+Turns your Mac's menu bar into a light show that moves with whatever you're playing.
+
+Made by Ichiro Ashihara (@IchiroA). © 2026 Ichiro Ashihara. Open source under the MIT License.
+
+Needs: a Mac with Apple Silicon (M1 or newer) running macOS 14.2 Sonoma or later.
+
+Install
+1. Drag "Barbeat" into your Applications folder.
+2. Open it. The first time, macOS checks that you want to open an app downloaded from the internet. Click Open.
+   A small bar-chart icon appears in the menu bar (there's no Dock icon).
+3. macOS asks to let Barbeat record system audio. Click Allow.
+   It only listens so it can animate the menu bar. Nothing is recorded or saved.
+4. macOS also asks to let Barbeat record the screen. Allow it to have the colors follow what's on screen
+   (if macOS offers "Quit & Reopen", click it). Barbeat only reads a few tiny frames a second for their
+   colors; nothing is recorded or saved. Without it, the colors use your Mac's accent color, or pick
+   any other palette in the menu bar panel.
+5. Play some music. It starts with stereo Center bars in your screen's colors and a glow around the screen edges.
+
+If macOS won't open the app
+Open System Settings > Privacy & Security, scroll down, and click "Open Anyway" next to Barbeat.
+
+Settings
+Click the bar-chart icon in the menu bar to pick a style (LED, Bars, Center, Glow, Pulse, VU, Aura,
+Waterfall, Scope, Sparks), colors (Screen colors follow what's on screen; or make your own under Custom),
+color drift, Stereo or full-width layout, brightness, Low/Mid/High boost, spark power, the screen edge glow
+(and how far it reaches into the screen), Keep menu bar text readable, whether to show over full-screen
+apps (just the edge glow, or the menu bar visuals too), and Launch at login.
+
+Listen to: everything your Mac plays, just one app (say Spotify, so calls and alerts don't move the bars),
+or a microphone / audio input. The first time you pick an input, macOS asks for microphone access.
+
+If nothing moves
+Make sure Barbeat is allowed under System Settings > Privacy & Security >
+Screen & System Audio Recording, then click "Try Again" in the menu bar panel.
