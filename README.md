@@ -1,5 +1,7 @@
 # Barbeat
 
+https://ichiroa.github.io/Barbeat/
+
 A macOS menu bar app that turns the strip behind the menu bar into a live light show
 driven by whatever your Mac is playing.
 
