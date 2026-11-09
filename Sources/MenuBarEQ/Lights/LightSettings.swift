@@ -99,6 +99,71 @@ struct ArtNetDevice: Codable, Identifiable, Equatable {
     var onStop = ArtNetStopAction.handBack
 }
 
+/// What a device's lights do with the voice (when Voice is on).
+enum LightVoiceMode: String, CaseIterable, Identifiable, Codable {
+    case off, follow, words
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .follow: return "Follow the singer"
+        case .words: return "Sparkles on words"
+        }
+    }
+}
+
+/// A device's own extras on top of the light show: Mirror, white sparkles on the beat, and the voice.
+struct LightEffects: Codable, Equatable {
+    /// The two halves match, mirrored around the middle.
+    var mirror = false
+    /// Mirror with bass at both ends (else bass in the middle).
+    var mirrorFromEnds = false
+    var sparkles = false
+    /// The most sparkles showing at once. Nil: picked from the number of lights.
+    var maxSparkles: Int?
+    /// Seconds a sparkle takes to fade out.
+    var sparkleFade = LightEffects.defaultFade
+    var voice = LightVoiceMode.off
+
+    /// Shows the Max sparkles and Fade settings (sparkles on the beat or on words).
+    var usesSparkles: Bool { sparkles || voice == .words }
+
+    static let defaultFade = 0.4, fadeRange = 0.1...2.0
+
+    init() {}
+
+    /// Missing keys keep their defaults, so saves from older and newer versions still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mirror = try c.decodeIfPresent(Bool.self, forKey: .mirror) ?? false
+        mirrorFromEnds = try c.decodeIfPresent(Bool.self, forKey: .mirrorFromEnds) ?? false
+        sparkles = try c.decodeIfPresent(Bool.self, forKey: .sparkles) ?? false
+        maxSparkles = try c.decodeIfPresent(Int.self, forKey: .maxSparkles)
+        sparkleFade = try c.decodeIfPresent(Double.self, forKey: .sparkleFade) ?? Self.defaultFade
+        voice = (try? c.decodeIfPresent(LightVoiceMode.self, forKey: .voice)) ?? .off
+    }
+
+    /// How many lights can sparkle at once on a device with `lightCount` lights (a mirrored pair counts as one).
+    func sparkleLimit(lightCount: Int) -> Int {
+        let places = max(1, mirror ? (lightCount + 1) / 2 : lightCount)
+        return min(places, max(1, maxSparkles ?? max(1, min(24, (places + 2) / 4))))
+    }
+}
+
+extension LightShow.Options {
+    /// `voice`: Voice is on, so the device's voice option counts.
+    mutating func apply(_ effects: LightEffects, lightCount: Int, voice: Bool) {
+        followVoice = voice && effects.voice == .follow
+        wordSparkles = voice && effects.voice == .words
+        mirror = effects.mirror
+        mirrorFromEnds = effects.mirrorFromEnds
+        sparkles = effects.sparkles
+        maxSparkles = effects.sparkleLimit(lightCount: lightCount)
+        sparkleFade = Float(min(LightEffects.fadeRange.upperBound, max(LightEffects.fadeRange.lowerBound, effects.sparkleFade)))
+    }
+}
+
 /// The lights' preferences, saved to UserDefaults as they change.
 final class LightSettings: ObservableObject {
     static let shared = LightSettings()
@@ -120,6 +185,9 @@ final class LightSettings: ObservableObject {
     /// Devices switched off in the Lights window, by output ID ("hue:<bridge id>", "artnet:<uuid>"). They stay set up,
     /// but Barbeat leaves their lights alone. Kept apart from the device lists so older saved devices still load.
     @Published var switchedOff: Set<String> { didSet { defaults.set(switchedOff.sorted(), forKey: Key.switchedOff) } }
+    /// Each device's Mirror and sparkles, by output ID (the preview and virtual lights too). Devices left
+    /// at the defaults have no entry. Kept apart from the device lists, like `switchedOff`.
+    @Published var effects: [String: LightEffects] { didSet { store(effects, Key.effects) } }
 
     static let defaultBaseGlow = 0.16, defaultBeatFlash = 0.64, defaultMaxBrightness = 1.0
 
@@ -130,6 +198,13 @@ final class LightSettings: ObservableObject {
 
     func setOn(_ on: Bool, _ id: String) {
         if on { switchedOff.remove(id) } else { switchedOff.insert(id) }
+    }
+
+    func effects(for id: String) -> LightEffects { effects[id] ?? LightEffects() }
+
+    func setEffects(_ value: LightEffects, for id: String) {
+        let next: LightEffects? = value == LightEffects() ? nil : value
+        if effects[id] != next { effects[id] = next }
     }
 
     func resetShow() {
@@ -150,7 +225,7 @@ final class LightSettings: ObservableObject {
         static let beatFlash = "lights.beatFlash", maxBrightness = "lights.maxBrightness", delayMs = "lights.delayMs"
         static let releaseAfter = "lights.releaseAfter", hueBridges = "lights.hueBridges"
         static let artNetDevices = "lights.artNetDevices", previewCount = "lights.previewCount"
-        static let switchedOff = "lights.switchedOff"
+        static let switchedOff = "lights.switchedOff", effects = "lights.effects"
     }
 
     private func store<T: Encodable>(_ value: T, _ key: String) {
@@ -185,6 +260,8 @@ final class LightSettings: ObservableObject {
         hueBridges = []
         artNetDevices = []
         switchedOff = Set(defaults.stringArray(forKey: Key.switchedOff) ?? [])
+        effects = [:]
+        if let saved = load([String: LightEffects].self, Key.effects) { effects = saved }
         if let saved = load([HueBridgeConfig].self, Key.hueBridges) { hueBridges = saved }
         if let saved = load([ArtNetDevice].self, Key.artNetDevices) { artNetDevices = saved }
     }

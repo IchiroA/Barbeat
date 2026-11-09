@@ -261,8 +261,9 @@ struct FrameColors {
     var ambient: ScreenColors.Colors?
 
     static func current(settings: Settings, display: CGDirectDisplayID?, time: Double) -> FrameColors {
-        guard settings.palette == .screen else {
-            return FrameColors(gradient: ResolvedGradient(palette: settings.palette, drift: settings.colorDrift, time: time),
+        guard settings.screenColors else {
+            let palette = settings.palette == .screen ? Palette.neon : settings.palette
+            return FrameColors(gradient: ResolvedGradient(palette: palette, drift: settings.colorDrift, time: time),
                                ambient: nil)
         }
         // The Screen palette brings its own colors (drift doesn't apply); Ambient light colors each spot separately.

@@ -106,8 +106,7 @@ final class ScreenColors: NSObject, ObservableObject {
     private let testVideo = ScreenColors.argument("--screen-video").map { URL(fileURLWithPath: $0) }
     fileprivate var videoTimer: Timer?
     /// Snapshot runs never start a real capture, so they can't put up the permission prompt.
-    private let liveAllowed = !CommandLine.arguments.contains("--snapshot")
-        && !CommandLine.arguments.contains("--panel-snapshot") && !CommandLine.arguments.contains("--lights-snapshot")
+    private let liveAllowed = !CommandLine.arguments.contains { $0 == "--snapshot" || $0.hasSuffix("-snapshot") }
 
     // MARK: - Colors for the renderer
 

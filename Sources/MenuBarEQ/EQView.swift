@@ -83,6 +83,21 @@ final class EQView: NSView {
         return CGFloat(value)
     }()
 
+    /// Bar columns per band. The analyzer has at most 128 bands, so on a screen wider than 16:9 (a 32:9 ultrawide,
+    /// say) each bar would stretch: there, bars keep the width they'd have on a 16:9 screen of the same height,
+    /// and the shader fills the extra columns with levels in between the bands.
+    private var barColumns: CGFloat {
+        if let forced = Self.forcedBarColumns { return forced }
+        guard let screen = window?.screen?.frame, screen.height > 0 else { return 1 }
+        return max(1, (screen.width / screen.height) / (16.0 / 9.0))
+    }
+    /// `--bar-columns 2` acts as if the screen were that much wider than 16:9 (to test in-between bars on any screen).
+    private static let forcedBarColumns: CGFloat? = {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--bar-columns"), i + 1 < args.count, let value = Double(args[i + 1]) else { return nil }
+        return CGFloat(max(1, min(8, value)))
+    }()
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateDrawableSize()
@@ -193,6 +208,23 @@ final class EQView: NSView {
         set(ShaderParam.edgeRun, edgeRun)
         set(ShaderParam.textGuard, edge == 0 && settings.readableMenuBar ? (MenuBarText.isLight ? 1 : 2) : 0)
         set(ShaderParam.edgeBands, CGFloat(min(analyzer.left.count, ShaderParam.maxBands)))
+        set(ShaderParam.barColumns, barColumns)
+        // Voice: the menu bar strip and the edge glow each follow their own "Show on" switch.
+        let voice = VoiceFrame.current, voiceSettings = VoiceSettings.shared
+        let voiceHere = edge == 0 ? voiceSettings.onMenuBar : voiceSettings.onEdgeGlow
+        set(ShaderParam.voiceColor, voice.color.r)
+        set(ShaderParam.voiceColor + 1, voice.color.g)
+        set(ShaderParam.voiceColor + 2, voice.color.b)
+        set(ShaderParam.voiceTint, voiceHere ? CGFloat(voice.tint) : 0)
+        set(ShaderParam.voiceGlow, edge == 0 && voiceSettings.onMenuBar ? CGFloat(voice.glow) : 0)
+        // Where this window sits on its screen (the voice color spreads from the screen's middle; Ambient light too).
+        if let window, let screen = window.screen?.frame, screen.width > 0, screen.height > 0 {
+            let f = window.frame
+            params[ShaderParam.ambientRect] = Float((f.minX - screen.minX) / screen.width)
+            params[ShaderParam.ambientRect + 1] = Float((f.maxX - screen.minX) / screen.width)
+            params[ShaderParam.ambientRect + 2] = Float((f.minY - screen.minY) / screen.height)
+            params[ShaderParam.ambientRect + 3] = Float((f.maxY - screen.minY) / screen.height)
+        }
         set(ShaderParam.ambient, ambientColors != nil ? 1 : 0)
         if let ambientColors { fillAmbient(ambientColors) }
 

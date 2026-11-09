@@ -17,6 +17,7 @@ final class HueOutput: LightOutput {
     private(set) var slots: [LightSlot] = []
     let maxRate = 50.0
     var onChange: (() -> Void)?
+    var endWithLightsOff = false
     private(set) var state: LightOutputState = .idle { didSet { if state != oldValue { onChange?() } } }
 
     private weak var hub: LightHub?
@@ -229,7 +230,13 @@ final class HueOutput: LightOutput {
 
     /// Puts the saved state back, then forgets it (unless a new take-over started meanwhile).
     private func restoreSnapshot(generation: Int) async {
-        guard let snap = snapshot, let key else { return }
+        guard var snap = snapshot, let key else { return }
+        if endWithLightsOff {
+            // Sleep timer: the same careful put-back, with every light off and no scenes recalled.
+            endWithLightsOff = false
+            snap.scenes = []
+            snap.lights = snap.lights.map { var light = $0; light.on = false; return light }
+        }
         let summary = await Self.putBack(snap, client: client, key: key)
         hub?.note(summary)
         // A new take-over started meanwhile keeps the snapshot: the lights still show the stream's colors.

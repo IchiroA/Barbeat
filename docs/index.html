@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Barbeat – Music visualizer for your Mac's menu bar</title>
-  <meta name="description" content="Barbeat is a free music visualizer for macOS. It turns your Mac's menu bar and screen edges into a light show that moves with your music, takes its colors from what's on screen, and can drive Philips Hue lights.">
+  <meta name="description" content="Barbeat is a free music visualizer for macOS. It turns your Mac's menu bar and screen edges into a light show that moves with your music, takes its colors from what's on screen, follows the singer, and can drive Philips Hue and WLED lights.">
   <link rel="canonical" href="https://ichiroa.github.io/Barbeat/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ichiroa.github.io/Barbeat/">
@@ -27,6 +27,8 @@
       <a class="optional" href="#start">Quick start</a>
       <a class="optional" href="#styles">Styles</a>
       <a class="optional" href="#settings">Settings</a>
+      <a class="optional" href="#scenes">Scenes</a>
+      <a class="optional" href="#voice">Voice</a>
       <a class="optional" href="#lights">Lights</a>
       <a href="#help">Help</a>
       <a href="#support">Support</a>
@@ -56,7 +58,7 @@
       <div class="feature-head">
         <span class="eyebrow gradient-text">Screen colors</span>
         <h2>The light from your screen, spilling over.</h2>
-        <p class="lead">Choose <strong>Screen</strong> under Colors and Barbeat watches what you're watching. The menu bar and the screen edges glow in the picture's own colors, spot by spot, as it changes.</p>
+        <p class="lead">Turn on <strong>Screen colors</strong> at the top of the panel and Barbeat watches what you're watching. The menu bar, the screen edges and your lights glow in the picture's own colors, spot by spot, as it changes. Turn it off and your own palette comes back.</p>
       </div>
 
       <div class="cards">
@@ -90,6 +92,8 @@
         </figure>
       </div>
       <p class="prose muted" style="margin-top: 18px;">Barbeat only counts light that stands well above the rest of the picture and has just appeared or moved. Steady bright things, like a white window or captions, fade into the background within a few seconds. <strong>Strength</strong> sets how much of the glow a beam takes over. In Main colors, beams tint the brightest colors instead.</p>
+      <h3>Your lights too</h3>
+      <p class="prose muted">With <strong>Flash your lights too</strong> on, a beam on screen also lights up your Hue and WLED lights in its own color, the ones on the same side of the room as the beam on screen. A laser sweeping left to right across a concert video sweeps across your room the same way, even in a quiet moment. Like every flash, it's capped at three a second per light.</p>
 
       <div class="facts">
         <div class="fact"><strong>Light on the Mac</strong><span>Tiny frames, 192 pixels wide: up to 6 a second, 15 while following beams (10 on battery). About a third of a millisecond of work each.</span></div>
@@ -107,10 +111,10 @@
       <h2>Up and running in a minute</h2>
       <ol class="steps prose">
         <li><strong>Download and install.</strong><p>Get <code>Barbeat-&lt;version&gt;.zip</code> from the <a href="https://github.com/IchiroA/Barbeat/releases/latest">download page</a>, unzip it and drag <strong>Barbeat</strong> into your Applications folder.</p></li>
-        <li><strong>Open it.</strong><p>macOS checks that you want to open an app from the internet: click Open. A bar-chart icon appears in the menu bar. Barbeat has no Dock icon.</p></li>
+        <li><strong>Open it.</strong><p>macOS checks that you want to open an app from the internet: click Open. A small four-bar icon appears in the menu bar (Barbeat has no Dock icon), and a welcome window shows what it can do.</p></li>
         <li><strong>Allow system audio.</strong><p>macOS asks to let Barbeat record system audio: click Allow. Barbeat only listens so it can animate; nothing is recorded or saved.</p></li>
-        <li><strong>Allow the screen, for Screen colors.</strong><p>macOS also asks to let Barbeat record the screen. Allow it to have the colors follow what's on screen (if macOS offers Quit &amp; Reopen, click it). Without it, pick any other palette.</p></li>
-        <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars in Ambient light colors and a deep glow around the screen. Click the bar-chart icon to change anything; changes apply instantly and are remembered.</p></li>
+        <li><strong>Turn on Screen colors.</strong><p>Click <strong>Turn On Screen Colors</strong> in the welcome window (or flip its switch at the top of the panel). Barbeat explains what it reads, then macOS asks to let it record the screen: allow it, and if macOS offers Quit &amp; Reopen, click it.</p></li>
+        <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars and a deep glow around the screen. Click the four-bar icon for quick controls, or <strong>Settings…</strong> for everything else. Changes apply instantly and are remembered.</p></li>
       </ol>
     </div>
   </section>
@@ -119,7 +123,7 @@
     <div class="wrap">
       <span class="eyebrow gradient-text">Styles</span>
       <h2>Ten ways to see the music</h2>
-      <p class="lead">Pick a style under <strong>Style</strong>. In Stereo layout the left channel plays left of the notch and the right channel to the right, with the bass hugging the notch. These pictures show the right half, starting at the notch.</p>
+      <p class="lead">Pick a style in the panel or under Settings › Look. In Stereo layout the left channel plays left of the notch and the right channel to the right, with the bass hugging the notch. These pictures show the right half, starting at the notch. On ultrawide screens, like a 32:9 monitor, Barbeat draws extra bars in between so they keep a normal width instead of stretching.</p>
       <div class="styles">
         <div class="style"><div><h4>LED</h4><p>Segmented bars, like a hardware equalizer.</p></div><img src="images/styles/led.jpg" alt="LED style" width="1520" height="98" loading="lazy"></div>
         <div class="style"><div><h4>Bars</h4><p>Solid bars.</p></div><img src="images/styles/bars.jpg" alt="Bars style" width="1520" height="98" loading="lazy"></div>
@@ -138,49 +142,96 @@
   <section id="settings">
     <div class="wrap">
       <span class="eyebrow gradient-text">Settings</span>
-      <h2>Everything in the panel</h2>
-      <p class="lead">Click the bar-chart icon in the menu bar. The switch at the top turns the whole show on or off.</p>
+      <h2>The panel and Settings</h2>
+      <p class="lead">Click the four-bar icon in the menu bar for quick controls: the on/off switch, Screen colors, scenes, style, colors, brightness, Lights and Voice. <strong>Settings…</strong> opens a window with everything else, one page per topic.</p>
       <div class="settings">
-        <div class="panel"><img src="images/panel.png" alt="The Barbeat settings panel" width="640" height="2950" loading="lazy"></div>
+        <div class="panel"><img src="images/panel.png" alt="The Barbeat panel: the on/off switch, the Screen colors card with the colors it sees, a Scene menu, ten styles, Brightness, Lights and Voice, and Settings and Quit buttons" width="640" height="1202" loading="lazy"></div>
         <div>
-          <p class="group-title">Sound</p>
+          <p class="group-title">Screen colors</p>
           <dl>
-            <dt>Listen to</dt>
-            <dd><strong>System</strong> is everything your Mac plays. <strong>One App</strong> listens to a single app, say Spotify or Safari, so calls and alerts don't move the bars. <strong>Input</strong> uses a microphone or audio interface; macOS asks for microphone access the first time. If that input is unplugged, Barbeat listens to system audio until it's back.</dd>
-            <dt>Sensitivity, Auto level</dt>
-            <dd>Auto level adjusts to how loud the music is, so the bars always fill the menu bar. Sensitivity makes everything react more or less on top of that.</dd>
-            <dt>Low · Mid · High</dt>
-            <dd>Boost or calm the bass, mids or treble on their own. <strong>Reset Tuning</strong> puts these, Brightness and Spark power back to the starting values.</dd>
+            <dt>Ambient light or Main colors, Follow light beams</dt>
+            <dd>Everything about <a href="#screen-colors">Screen colors</a>, on its own page: the two ways it colors things, light beams with their Strength, whether beams flash your lights, and what Barbeat is watching right now.</dd>
           </dl>
 
           <p class="group-title">Look</p>
           <dl>
-            <dt>Style, Layout, Bands</dt>
-            <dd>The ten styles above. <strong>Stereo L | R</strong> splits left and right around the notch; <strong>Full width</strong> spreads both channels together across the whole bar. Bands sets how many bars (16 to 128).</dd>
+            <dt>Style, Layout, Bars</dt>
+            <dd>The ten styles, each with a picture. <strong>Stereo L | R</strong> splits left and right around the notch; <strong>Full width</strong> spreads both channels across the whole bar. Bands sets how many bars (16 to 128). <strong>Peak hold</strong> adds little caps at each bar's latest peak.</dd>
             <dt>Colors</dt>
-            <dd>Classic, Spectrum, Neon, Fire, Ice, White, Accent (your Mac's accent color), Wallpaper (picked from your desktop picture), <a href="#screen-colors">Screen</a> and Custom. <strong>Customize</strong> copies any palette into Custom, where you set four colors, by frequency or by bar height, with Shuffle, colors from your wallpaper and four preset slots.</dd>
-            <dt>Color drift</dt>
-            <dd>Slowly turns any palette around the color wheel.</dd>
-            <dt>Opacity, Brightness</dt>
-            <dd>How see-through the bars are, and how strong the glow and colors are.</dd>
-            <dt>Peak hold</dt>
-            <dd>Little caps that hang at each bar's latest peak (LED, Bars, Center and VU).</dd>
-            <dt>Keep menu bar text readable</dt>
-            <dd>Tones down bar colors bright enough to wash out the menu bar's own text and icons, like white bars behind white text. Reds, blues and purples stay as they are, and the edge glow keeps its full colors.</dd>
+            <dd>Used whenever Screen colors is off: Classic, Spectrum, Neon, Fire, Ice, White, Accent (your Mac's accent color), Wallpaper (picked from your desktop picture) and Custom. <strong>Customize These Colors</strong> copies any palette into Custom, where you set four colors, by frequency or by bar height, with Shuffle, colors from your wallpaper and four preset slots. <strong>Color drift</strong> slowly turns them around the color wheel.</dd>
           </dl>
 
-          <p class="group-title">Screen</p>
+          <p class="group-title">Sound</p>
           <dl>
+            <dt>Listen to</dt>
+            <dd><strong>System</strong> is everything your Mac plays. <strong>One App</strong> listens to a single app, say Spotify or Safari, so calls and alerts don't move the bars. <strong>Input</strong> uses a microphone or audio interface; macOS asks for microphone access the first time. If that input is unplugged, Barbeat listens to system audio until it's back.</dd>
+            <dt>Sensitivity, Auto level, Low · Mid · High</dt>
+            <dd>Auto level adjusts to how loud the music is, so the bars always fill the menu bar; Sensitivity makes everything react more or less on top of that. Low, mid and high boost or calm the bass, mids or treble. <strong>Reset Tuning</strong> puts them back.</dd>
+          </dl>
+
+          <p class="group-title">Glow and screens</p>
+          <dl>
+            <dt>Brightness, Opacity, Keep menu bar text readable</dt>
+            <dd>How strong the colors are and how see-through the bars are. Keeping the text readable tones down colors bright enough to wash out the menu bar's own text and icons; the edge glow keeps its full colors.</dd>
             <dt>Screen edge glow</dt>
-            <dd>A soft glow along the left, right and bottom edges of the screen. <strong>Depth</strong> sets how far it reaches in (up to a third of the screen). <strong>Top edge too</strong> adds the top, just below the menu bar.</dd>
-            <dt>Show on all displays</dt>
-            <dd>Draws on every screen, or just the main one.</dd>
-            <dt>Show over full-screen apps</dt>
-            <dd>Keeps the edge glow on all four sides while an app is in full screen. Turn on <strong>Menu bar visuals too</strong> to also draw the bars where the hidden menu bar would be; they step aside whenever you use the menu bar.</dd>
-            <dt>Launch at login</dt>
-            <dd>Starts Barbeat when you log in.</dd>
+            <dd>A soft glow around the edges of the screen. <strong>Depth</strong> sets how far it reaches in (up to a third of the screen). <strong>Top edge too</strong> adds the top, just below the menu bar.</dd>
+            <dt>Where it shows</dt>
+            <dd>All displays or just the main one, and over full-screen apps: the edge glow on all four sides, plus the bars too if you turn on <strong>Menu bar visuals too</strong> (they step aside whenever you use the menu bar).</dd>
+          </dl>
+
+          <p class="group-title">General</p>
+          <dl>
+            <dt>Starting up, updates</dt>
+            <dd>Open Barbeat when you log in, let the menu bar icon move with the music, and check for updates automatically (about once a day, on GitHub). When there's a new version, Barbeat asks first, then installs it and restarts by itself.</dd>
           </dl>
         </div>
+      </div>
+      <figure class="shot" style="margin-top: 36px;">
+        <img src="images/settings-screen.jpg" alt="The Settings window on the Screen colors page: a sidebar with Screen colors, Scenes, Look, Sound, Glow and screens, Lights, Voice and General; the page shows the stage picture, the Screen colors switch, the colors it sees, the Ambient light and Main colors cards and the light beam settings" width="1640" height="1784" loading="lazy">
+      </figure>
+      <figcaption>Settings opens on Screen colors. Lights and Voice have their own pages too.</figcaption>
+    </div>
+  </section>
+
+  <section id="scenes">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Scenes</span>
+      <h2>One click for a whole look</h2>
+      <p class="lead">A scene saves everything at once: the style, colors, Screen colors, glow, lights and voice. Pick one from the <strong>Scene</strong> menu in the panel, or let Barbeat switch on its own.</p>
+      <div class="cards" style="margin-top: 28px;">
+        <div class="card">
+          <span class="tag">Starter scenes</span>
+          <h4>Concert, Chill, Focus and On a call</h4>
+          <p class="muted">Concert is Center bars in Screen colors with light beams and bright lights. Chill is a slow, soft glow. Focus is thin, quiet bars with the lights off. On a call goes dark until the call ends. Change them, delete them, or save your own with <strong>Save Current Look</strong>.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Automatic</span>
+          <h4>Switches when an app plays, or you're on a call</h4>
+          <p class="muted">Give a scene a trigger: <strong>while one of these apps plays</strong> (Concert while Safari plays a show, Chill for Apple Music) or <strong>while you're on a call</strong> (any app using a microphone). When the trigger ends, everything goes back to how it was. Pick another scene meanwhile and yours wins until the trigger ends.</p>
+        </div>
+      </div>
+      <figure class="shot" style="margin-top: 28px;">
+        <img src="images/settings-scenes.jpg" alt="Settings › Scenes: Switch scenes automatically, and cards for On a call, Concert, Chill and Focus, each with a Use button, a summary and its triggers" width="1640" height="1672" loading="lazy">
+      </figure>
+      <p class="note">Barbeat waits a few seconds before switching, so a notification sound doesn't change the scene, and a little longer before switching back, so it doesn't flip between songs.</p>
+    </div>
+  </section>
+
+  <section id="voice">
+    <div class="wrap">
+      <span class="eyebrow gradient-text">Voice</span>
+      <h2>Colors that follow the singer</h2>
+      <p class="lead">Turn on <strong>Voice</strong> in the panel and Barbeat listens for singing, speech or both. While someone sings, the voice color spreads out from the middle of the screen, further with louder singing, and the rest keeps the music's colors.</p>
+      <div class="prose">
+        <dl>
+          <dt>Voice color or Pitch color</dt>
+          <dd>A color of your choice (warm gold to start), or one that follows the singer's notes: blue for low notes, through green and yellow, to orange for high ones. <strong>Strength</strong> sets how far it can spread.</dd>
+          <dt>Voice glow</dt>
+          <dd>A soft glow that swells out of the notch (or the middle) with each word, behind the bars.</dd>
+          <dt>Show on</dt>
+          <dd>The menu bar, the edge glow and your lights, each on or off. Each light device also has its own Voice option: lights that follow the singer, or white sparkles on words.</dd>
+        </dl>
+        <p class="muted">Barbeat finds voices with Apple's sound recognizer, built into macOS, plus its own check for a single pitched voice in the middle of the mix, where most singers are. Instrumental parts stay quiet. It all runs on your Mac and uses about 1% of one processor core.</p>
       </div>
     </div>
   </section>
@@ -195,7 +246,7 @@
           <h4>Philips Hue</h4>
           <ol class="muted">
             <li>In the Hue app, make an <strong>Entertainment area</strong> with the lights you want.</li>
-            <li>In Barbeat's panel, click <strong>Set Up…</strong> next to Lights, then <strong>Add Hue Bridge</strong>.</li>
+            <li>In Barbeat's panel, click <strong>Set Up…</strong> next to Lights (it opens Settings › Lights), then <strong>Add Hue Bridge</strong>.</li>
             <li>Pick your bridge (or type its IP address), click <strong>Pair</strong> and press the round button on top of the bridge.</li>
             <li>Choose the Entertainment area. <strong>Identify</strong> blinks its lights one by one.</li>
           </ol>
@@ -216,8 +267,14 @@
           <dd><strong>Auto</strong> picks for each device: <strong>Pulse</strong> for one light, <strong>Stereo</strong> for two, <strong>Bands</strong> for three to nine (a room-sized equalizer, bass on the left), and <strong>Mirror</strong> for strips, which copy the menu bar at the same spot.</dd>
           <dt>Base glow, Beat flash, Brightness, Delay</dt>
           <dd>How much the lights glow between beats, how hard they flash, how bright they get, and a delay for AirPlay or Bluetooth speakers that play late.</dd>
+          <dt>Mirror, sparkles and voice, for each device</dt>
+          <dd><strong>Mirror</strong> makes the two halves match, with the bass in the middle or at both ends. <strong>White sparkles on the beat</strong> flash a few random lights white on every beat, up to <strong>Max sparkles</strong> at once, fading over <strong>Fade</strong>. <strong>Voice</strong> makes the lights follow the singer, or sparkle on words.</dd>
+          <dt>Light beams</dt>
+          <dd>With Screen colors on, beams and lasers on screen flash the lights on the same side of the room, in their own color (<a href="#screen-colors">Your lights too</a>).</dd>
+          <dt>Sleep timer</dt>
+          <dd>For falling asleep to music: after 15, 30, 60 or 90 minutes the lights fade out over a minute and stay off, even if the music ends first. Set it on the Lights page or with the moon button in the panel.</dd>
           <dt>Each device's switch</dt>
-          <dd>Every Hue Bridge and Art-Net device has its own on/off switch in the Lights window. Switch one off to leave those lights alone for now (Hue lights go back to how they were) while the others keep playing. It stays set up for next time.</dd>
+          <dd>Every Hue Bridge and Art-Net device has its own on/off switch on the Lights page. Switch one off to leave those lights alone for now (Hue lights go back to how they were) while the others keep playing. It stays set up for next time.</dd>
           <dt>Give back after</dt>
           <dd>When the music stops (10 s, 30 s, 2 min or never), when you turn Lights or a device off, quit or the Mac sleeps, Hue lights go back to exactly how they were before: on or off, brightness, color and scene.</dd>
         </dl>
@@ -226,10 +283,40 @@
     </div>
   </section>
 
+  <section id="links">
+    <div class="wrap prose">
+      <span class="eyebrow gradient-text">Shortcuts</span>
+      <h2>Control it from anywhere</h2>
+      <p class="muted">Barbeat understands <code>barbeat://</code> links, so the Shortcuts app ("Open URL"), a Stream Deck, Raycast, Alfred or a bookmark can switch it:</p>
+      <dl>
+        <dt><code>barbeat://on</code> · <code>barbeat://off</code> · <code>barbeat://toggle</code></dt>
+        <dd>The whole show on or off.</dd>
+        <dt><code>barbeat://scene/Concert</code></dt>
+        <dd>Switch to a scene by name.</dd>
+        <dt><code>barbeat://style/center</code></dt>
+        <dd>Pick a style.</dd>
+        <dt><code>barbeat://screen-colors/on</code> · <code>barbeat://lights/off</code> · <code>barbeat://voice/toggle</code></dt>
+        <dd>Screen colors, Lights or Voice on, off or toggled.</dd>
+        <dt><code>barbeat://sleep/30</code> · <code>barbeat://sleep/off</code></dt>
+        <dd>Start the lights' sleep timer (minutes), or cancel it.</dd>
+        <dt><code>barbeat://settings/lights</code></dt>
+        <dd>Open Settings at a page: screen, scenes, look, sound, glow, lights, voice or general.</dd>
+      </dl>
+    </div>
+  </section>
+
   <section id="help">
     <div class="wrap prose">
       <span class="eyebrow gradient-text">Help</span>
       <h2>If something's off</h2>
+      <details>
+        <summary>Where did the settings go?</summary>
+        <div><p>Since version 1.11 the panel has quick controls only. Click <strong>Settings…</strong> at the bottom of the panel for everything else, including Lights and Voice. Screen colors is now its own switch at the top of the panel instead of a palette.</p></div>
+      </details>
+      <details>
+        <summary>The look changed by itself</summary>
+        <div><p>A scene with a trigger switched on, for example On a call while an app used the microphone. The Scene row in the panel says why. Turn off <strong>Switch scenes automatically</strong> under Settings › Scenes, or remove the trigger from that scene.</p></div>
+      </details>
       <details>
         <summary>The bars don't move</summary>
         <div><p>Open System Settings › Privacy &amp; Security › Screen &amp; System Audio Recording and make sure Barbeat is turned on. Then click <strong>Try Again</strong> in Barbeat's panel. If you chose One App, check that the app is actually playing sound.</p></div>
@@ -265,7 +352,7 @@
       <details>
         <summary>How do I uninstall it?</summary>
         <div>
-          <p>Click <strong>Quit Barbeat</strong> at the bottom of the panel and drag Barbeat from Applications to the Trash. Any Hue lights it was using are put back first.</p>
+          <p>Click <strong>Quit</strong> at the bottom of the panel and drag Barbeat from Applications to the Trash. Any Hue lights it was using are put back first.</p>
           <p>To also remove its settings, run <code>defaults delete com.ia.MenuBarEQ</code> in Terminal. Hue pairing keys are in your keychain under <code>com.ia.MenuBarEQ.hue</code>.</p>
         </div>
       </details>
@@ -277,7 +364,7 @@
     <div class="wrap prose">
       <span class="eyebrow gradient-text">Privacy</span>
       <h2>Nothing leaves your Mac</h2>
-      <p class="muted">Barbeat doesn't collect anything: no accounts, no analytics, no ads. Sound and screen frames are analyzed live in memory and never recorded, saved or sent. The only network traffic is to lights you set up yourself on your own network. Read the full <a href="privacy.html">privacy policy</a>.</p>
+      <p class="muted">Barbeat doesn't collect anything: no accounts, no analytics, no ads. Sound and screen frames are analyzed live in memory and never recorded, saved or sent. The only network traffic is to lights you set up yourself on your own network, and a once-a-day check for a newer version on GitHub, which you can turn off. Voices are found on your Mac with Apple's built-in sound recognizer. Read the full <a href="privacy.html">privacy policy</a>.</p>
     </div>
   </section>
 

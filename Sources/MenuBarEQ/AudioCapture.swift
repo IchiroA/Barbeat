@@ -337,6 +337,8 @@ struct AudioProcess {
     let bundleID: String
     let path: String
     let isPlaying: Bool
+    /// Recording from an input (a mic): a call, a voice memo, dictation.
+    var isRecording = false
 }
 
 /// Small typed wrappers around the Core Audio property API.
@@ -392,6 +394,18 @@ enum HAL {
         }
     }
 
+    /// A real input (a mic, a headset, an audio interface) is in use by some app: a call, usually. Barbeat's own
+    /// capture devices, aggregate and virtual devices don't count (screen recorders and loopback tools use those),
+    /// and neither does `except`, the input Barbeat itself listens to.
+    static func microphoneInUse(except uid: String?) -> Bool {
+        inputDevices().contains { device in
+            device.id != uid
+                && device.transport != kAudioDeviceTransportTypeAggregate
+                && device.transport != kAudioDeviceTransportTypeVirtual
+                && (value(device.objectID, kAudioDevicePropertyDeviceIsRunningSomewhere, initial: UInt32(0)) ?? 0) != 0
+        }
+    }
+
     /// Every process Core Audio knows about (anything that has opened audio).
     static func audioProcesses() -> [AudioProcess] {
         objectList(system, kAudioHardwarePropertyProcessObjectList).map { id in
@@ -401,7 +415,8 @@ enum HAL {
                 pid: pid,
                 bundleID: string(id, kAudioProcessPropertyBundleID) ?? "",
                 path: executablePath(pid),
-                isPlaying: (value(id, kAudioProcessPropertyIsRunningOutput, initial: UInt32(0)) ?? 0) != 0)
+                isPlaying: (value(id, kAudioProcessPropertyIsRunningOutput, initial: UInt32(0)) ?? 0) != 0,
+                isRecording: (value(id, kAudioProcessPropertyIsRunningInput, initial: UInt32(0)) ?? 0) != 0)
         }
     }
 

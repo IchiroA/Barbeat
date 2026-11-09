@@ -1,33 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// The Lights window: devices, the light show's settings, and a live preview of every light.
+/// The Lights settings now live in the Settings window, as a page.
 enum LightsWindow {
-    private static var window: NSWindow?
-    private static let delegate = Delegate()
-
-    static func show() {
-        if window == nil {
-            let host = NSHostingController(rootView: LightsView(settings: .shared, hub: .shared, app: .shared))
-            let window = NSWindow(contentViewController: host)
-            window.title = "Barbeat Lights"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 500, height: 720))
-            window.center()
-            window.delegate = delegate
-            self.window = window
-        }
-        LightHub.shared.previewWanted = true
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
-    }
-
-    private final class Delegate: NSObject, NSWindowDelegate {
-        func windowWillClose(_ notification: Notification) {
-            LightHub.shared.previewWanted = false
-        }
-    }
+    static func show() { SettingsWindow.show(.lights) }
 }
 
 /// The Lights row in the menu bar panel.
@@ -53,6 +29,9 @@ struct LightsRow: View {
                 }
             }
             Spacer(minLength: 4)
+            if settings.hasDevices || hub.sleepUntil != nil {
+                SleepTimerControl(hub: hub, compact: true)
+            }
             Button("Set Up…") { LightsWindow.show() }
                 .controlSize(.small)
             Toggle("Lights", isOn: Binding(get: { settings.enabled }, set: { on in
@@ -106,6 +85,7 @@ struct LightsView: View {
     @ObservedObject var settings: LightSettings
     @ObservedObject var hub: LightHub
     @ObservedObject var app: Settings
+    @ObservedObject var voiceSettings = VoiceSettings.shared
     /// False for offscreen snapshots, which can't measure a scroll view.
     var scrolls = true
     @StateObject private var pairing = HuePairing()
@@ -167,7 +147,7 @@ struct LightsView: View {
                 Circle().fill(hub.health.color).frame(width: 7, height: 7)
                 Text(settings.enabled ? hub.summary : "Off").font(.callout)
             }
-            caption("The lights use Barbeat's colors (\(app.palette.title) now) and take over when music plays.")
+            caption("The lights use Barbeat's colors (\(app.screenColors ? "Screen colors" : app.palette.title) now) and take over when music plays.")
         }
     }
 
@@ -202,6 +182,13 @@ struct LightsView: View {
             }
             .help("How long it's quiet before Barbeat hands the lights back.")
             caption("Seconds of silence before the lights go back to how they were.")
+            HStack(spacing: 8) {
+                Text("Sleep timer")
+                    .font(.callout)
+                    .frame(width: 110, alignment: .leading)
+                SleepTimerControl(hub: hub)
+            }
+            caption("For falling asleep to music: the lights fade out over the last minute and stay off, even if the music ends first.")
             Button("Reset Light Show") { settings.resetShow() }
                 .controlSize(.small)
         }
@@ -231,7 +218,7 @@ struct LightsView: View {
                     Text(output.title).font(.headline)
                     caption(output.detail)
                     if let mode = hub.modes[output.id] {
-                        caption("\(mode.title)\(settings.mode == .auto ? " (Auto)" : "") · \(modeDetail(mode, count: output.slots.count))")
+                        caption("\(mode.title)\(settings.mode == .auto ? " (Auto)" : "") · \(modeDetail(mode, count: output.slots.count, effects: settings.effects(for: output.id)))")
                     }
                 }
                 Spacer()
@@ -259,6 +246,7 @@ struct LightsView: View {
             }
             if settings.enabled, deviceOn, case let .failed(message) = output.state { problem(message) }
             if case let .needsSetup(message) = output.state { problem(message) }
+            if deviceOn { effectsControls(output) }
 
             if let hue = output as? HueOutput { hueControls(hue) }
             if let artNet = output as? ArtNetOutput { artNetControls(artNet) }
@@ -314,6 +302,73 @@ struct LightsView: View {
         if editing == id, let device = binding(for: id) {
             ArtNetEditor(device: device)
         }
+    }
+
+    // MARK: - Mirror and sparkles (each device's own)
+
+    private func effectsBinding(_ id: String) -> Binding<LightEffects> {
+        Binding(get: { settings.effects(for: id) }, set: { settings.setEffects($0, for: id) })
+    }
+
+    private func effectsControls(_ output: LightOutput) -> some View {
+        let fx = effectsBinding(output.id)
+        let value = fx.wrappedValue
+        let n = output.slots.count
+        let places = max(1, value.mirror ? (n + 1) / 2 : n)
+        let mode = hub.modes[output.id] ?? settings.mode.resolved(lightCount: n)
+        let maxSparkles = Binding<Double>(get: { Double(fx.wrappedValue.sparkleLimit(lightCount: n)) },
+                                          set: { fx.wrappedValue.maxSparkles = Int($0.rounded()) })
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Toggle("Mirror", isOn: fx.mirror)
+                    .help("The two halves of the lights match, like a mirror. Bands and Mirror fold around the middle, and sparkles come in pairs.")
+                if value.mirror {
+                    Picker("Mirror", selection: fx.mirrorFromEnds) {
+                        Text("Bass in the middle").tag(false)
+                        Text("Bass at the ends").tag(true)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                Spacer(minLength: 0)
+            }
+            Toggle("White sparkles on the beat", isOn: fx.sparkles)
+                .help("Every beat flashes a few random lights white, then they fade. Harder beats light more of them.")
+            HStack(spacing: 8) {
+                Text("Voice").font(.callout)
+                Picker("Voice", selection: fx.voice) {
+                    ForEach(LightVoiceMode.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .fixedSize()
+                .help("Follow the singer: the lights' brightness rides the voice. Sparkles on words: each sung word flashes a few lights white.")
+                Spacer(minLength: 0)
+            }
+            if value.voice != .off, !voiceSettings.enabled {
+                caption("Turn on Voice in the menu bar panel for this to work.")
+            }
+            if value.usesSparkles {
+                VStack(alignment: .leading, spacing: 4) {
+                    if places > 1 {
+                        // Tick marks only while they fit; long strips slide freely (the value is rounded).
+                        slider("Max sparkles", value: maxSparkles, in: 1...Double(places), step: places <= 16 ? 1 : nil,
+                               text: "\(value.sparkleLimit(lightCount: n))",
+                               help: value.mirror ? "The most sparkles showing at once. With Mirror each one is a pair."
+                                                  : "The most lights sparkling at once.")
+                    }
+                    slider("Fade", value: fx.sparkleFade, in: LightEffects.fadeRange,
+                           text: String(format: "%.1f s", value.sparkleFade),
+                           help: "How long a sparkle takes to fade out: short is a quick glint, long a soft afterglow.")
+                }
+                .padding(.leading, 20)
+            }
+            if value.mirror, mode == .pulse || mode == .stereo {
+                caption(mode == .pulse ? "Pulse lights every light the same, so Mirror only pairs up the sparkles."
+                                       : "Stereo keeps left and right apart, so Mirror only pairs up the sparkles.")
+            }
+        }
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
     }
 
     // MARK: - Adding devices
@@ -468,13 +523,20 @@ struct LightsView: View {
         }
     }
 
-    private func modeDetail(_ mode: LightMode, count: Int) -> String {
+    private func modeDetail(_ mode: LightMode, count: Int, effects fx: LightEffects) -> String {
         switch mode {
         case .auto, .pulse: return "every light pulses together"
         case .stereo: return "left and right channels"
         case .bands:
+            if fx.mirror {
+                return fx.mirrorFromEnds ? "bass at both ends → treble in the middle" : "bass in the middle → treble at both ends"
+            }
             return count == 3 ? "low · mid · high, left to right" : "bass on the left → treble on the right"
-        case .mirror: return app.layout == .stereo ? "copies the menu bar, bass in the middle" : "copies the menu bar, bass on the left"
+        case .mirror:
+            if fx.mirror {
+                return "copies the menu bar onto both halves, bass \(fx.mirrorFromEnds ? "at the ends" : "in the middle")"
+            }
+            return app.layout == .stereo ? "copies the menu bar, bass in the middle" : "copies the menu bar, bass on the left"
         }
     }
 
@@ -674,6 +736,60 @@ struct LightStrip: View {
                     context.stroke(Path(ellipseIn: rect), with: .color(.primary.opacity(0.15)), lineWidth: 1)
                 }
             }
+        }
+    }
+}
+
+/// The sleep timer: pick how long, or see when the lights go off and cancel.
+struct SleepTimerControl: View {
+    @ObservedObject var hub: LightHub
+    /// The panel's moon button instead of the full control.
+    var compact = false
+    private static let choices: [Double] = [15, 30, 60, 90]
+
+    var body: some View {
+        if compact {
+            Menu {
+                if let until = hub.sleepUntil {
+                    Text("Lights off at \(until.formatted(date: .omitted, time: .shortened))")
+                    Button("Cancel Sleep Timer") { hub.cancelSleep() }
+                } else {
+                    Text("Fade the lights out and switch them off in")
+                    ForEach(Self.choices, id: \.self) { minutes in
+                        Button(Self.title(minutes)) { hub.startSleep(minutes: minutes) }
+                    }
+                }
+            } label: {
+                Image(systemName: hub.sleepUntil == nil ? "moon" : "moon.zzz.fill")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(hub.sleepUntil == nil ? Color.secondary : Color.accentColor)
+            .help(hub.sleepUntil.map { "Sleep timer: lights off at \($0.formatted(date: .omitted, time: .shortened))" }
+                  ?? "Sleep timer")
+        } else if let until = hub.sleepUntil {
+            HStack(spacing: 8) {
+                Label("Lights off at \(until.formatted(date: .omitted, time: .shortened))", systemImage: "moon.zzz.fill")
+                    .font(.callout)
+                Button("Cancel") { hub.cancelSleep() }
+                    .controlSize(.small)
+            }
+        } else {
+            Menu("Off") {
+                ForEach(Self.choices, id: \.self) { minutes in
+                    Button(Self.title(minutes)) { hub.startSleep(minutes: minutes) }
+                }
+            }
+            .fixedSize()
+        }
+    }
+
+    private static func title(_ minutes: Double) -> String {
+        switch Int(minutes) {
+        case 60: return "1 hour"
+        case 90: return "1 hour 30 minutes"
+        default: return "\(Int(minutes)) minutes"
         }
     }
 }

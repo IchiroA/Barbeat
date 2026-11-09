@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Barbeat · Privacy</title>
-  <meta name="description" content="Barbeat's privacy policy: it collects no data. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent.">
+  <meta name="description" content="Barbeat's privacy policy: it collects no data. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent. It checks GitHub for updates once a day.">
   <link rel="canonical" href="https://ichiroa.github.io/Barbeat/privacy.html">
   <link rel="icon" href="images/icon.png">
   <link rel="stylesheet" href="style.css">
@@ -26,10 +26,10 @@
 <main class="page">
   <div class="wrap prose">
     <h1>Privacy policy</h1>
-    <p class="muted">Effective November 4, 2026</p>
+    <p class="muted">Effective November 9, 2026</p>
 
     <div class="summary-box">
-      <p><strong>Barbeat collects no data.</strong> There are no accounts, analytics, ads or tracking. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent anywhere. The only network traffic goes to lights you set up yourself, on your own network.</p>
+      <p><strong>Barbeat collects no data.</strong> There are no accounts, analytics, ads or tracking. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent anywhere. The only network traffic goes to lights you set up yourself, on your own network, and a once-a-day check for a newer version on GitHub (which you can turn off).</p>
     </div>
 
     <h2>Sound</h2>
@@ -38,11 +38,20 @@
     <h2>Screen</h2>
     <p>If you choose Screen colors, Barbeat reads small frames of your screen (192 pixels wide, a few to 15 a second) to work out their colors, or only the window of the app you're listening to. Each frame is analyzed in memory and thrown away; none are saved or sent. Barbeat's own windows are left out. macOS asks your permission first and shows its recording icon in the menu bar while this is on.</p>
 
+    <h2>Voice</h2>
+    <p>If you turn on Voice, Barbeat listens for singing or speech in the same sound, using Apple's sound recognizer built into macOS. It runs on your Mac; nothing is recorded, saved or sent, and Barbeat never turns speech into words.</p>
+
+    <h2>Scenes</h2>
+    <p>Scenes that switch on their own check, every two seconds, which apps are playing sound and whether any app is using a microphone. Barbeat only reads that yes or no from macOS; it never listens to the microphone for this. Nothing about it is saved or sent.</p>
+
     <h2>Desktop picture</h2>
     <p>The Wallpaper colors and the "From Wallpaper" button read your current desktop picture on your Mac to pick a few colors. The picture isn't copied, saved or sent.</p>
 
     <h2>Lights</h2>
     <p>If you set up lights, Barbeat talks to your Philips Hue Bridge and Art-Net devices (such as WLED) directly over your local network. To find a Hue Bridge, it looks on your local network and may also ask Philips' public discovery service (<code>discovery.meethue.com</code>), which lists bridges registered from your internet connection. That request includes no information about you beyond what any web request does (your IP address); Philips' own privacy policy covers it. macOS asks for Local Network permission the first time.</p>
+
+    <h2>Updates</h2>
+    <p>About once a day Barbeat asks GitHub (<code>api.github.com</code>) for its latest release, to tell you when there's a newer version. Like any web request, this shows GitHub your IP address; it sends nothing else about you, and GitHub's own privacy policy covers it. If you choose to update, Barbeat downloads the new version from GitHub and installs it only if it's signed by its developer and notarized by Apple. You can turn the daily check off in the update dialog.</p>
 
     <h2>What's stored on your Mac</h2>
     <ul>
@@ -50,7 +59,7 @@
       <li>Hue pairing keys, in your login keychain.</li>
       <li>While Barbeat controls Hue lights: a note of how the lights were set, in Barbeat's Application Support folder, so they can be put back even after a crash. It's removed once they're restored.</li>
     </ul>
-    <p>Nothing is stored anywhere else, and Barbeat doesn't check for updates or contact any server of its own.</p>
+    <p>Nothing is stored anywhere else, and Barbeat has no server of its own.</p>
 
     <h2>Children</h2>
     <p>Barbeat collects no information from anyone, including children.</p>

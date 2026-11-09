@@ -1,15 +1,13 @@
 import SwiftUI
-import ServiceManagement
 
+/// The menu bar panel: quick controls. Everything else is in the Settings window.
 struct SettingsView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var status: AudioStatus
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var loginError: String?
-    @State private var contentHeight: CGFloat = 700
+    @State private var contentHeight: CGFloat = 600
 
     var body: some View {
-        // Scrolls only when the panel is taller than the screen (small displays, the custom color editor open).
+        // Scrolls only when the panel is taller than the screen (small displays).
         ScrollView(.vertical) {
             panel.background(GeometryReader { geo in
                 Color.clear.preference(key: PanelHeightKey.self, value: geo.size.height)
@@ -41,20 +39,15 @@ struct SettingsView: View {
 
             StatusLine(status: status)
 
-            LightsRow(settings: .shared, hub: .shared)
-
-            Divider()
+            ScreenColorsCard(settings: settings, screen: .shared)
+            SceneRow(store: .shared)
 
             Group {
-                labeled("Listen to") {
-                    SourcePicker(settings: settings, list: .shared)
-                }
-
                 labeled("Style") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
                             ForEach(EQStyle.allCases) { style in
-                                StyleTile(style: style, selected: settings.style == style) {
+                                StyleTile(style: style, selected: settings.style == style, compact: true) {
                                     settings.style = style
                                 }
                             }
@@ -65,245 +58,99 @@ struct SettingsView: View {
                     }
                 }
 
-                labeled("Layout") {
-                    Picker("Layout", selection: $settings.layout) {
-                        ForEach(EQLayout.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .disabled(!settings.style.supportsLayout)
-                    if settings.layout == .stereo || !settings.style.supportsLayout {
-                        Text("Left channel left of the notch, right channel to the right.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                labeled("Colors · \(settings.palette.title)", accessory: {
-                    if settings.palette != .custom {
-                        Button("Customize") { settings.customizeCurrentPalette() }
-                            .buttonStyle(.link)
-                            .font(.caption)
-                            .help("Copy these colors into Custom so you can change them")
-                    }
-                }) {
-                    HStack(spacing: 6) {
-                        ForEach(Palette.allCases) { palette in
-                            Button { settings.palette = palette } label: {
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(palette == .custom ? settings.customGradient.swatch : palette.swatch)
-                                    .frame(width: 22, height: 22)
-                                    .overlay {
-                                        if let symbol = palette.badge {
-                                            Image(systemName: symbol)
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(.white)
-                                                .shadow(color: .black.opacity(0.5), radius: 1)
+                if !settings.screenColors {
+                    labeled("Colors · \(settings.palette.title)") {
+                        HStack(spacing: 6) {
+                            ForEach(Palette.allCases.filter { $0 != .screen }) { palette in
+                                Button { settings.palette = palette } label: {
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(palette == .custom ? settings.customGradient.swatch : palette.swatch)
+                                        .frame(width: 21, height: 21)
+                                        .overlay {
+                                            if let symbol = palette.badge {
+                                                Image(systemName: symbol)
+                                                    .font(.system(size: 9, weight: .semibold))
+                                                    .foregroundStyle(.white)
+                                                    .shadow(color: .black.opacity(0.5), radius: 1)
+                                            }
                                         }
-                                    }
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 7)
-                                            .strokeBorder(Color.primary.opacity(settings.palette == palette ? 0.9 : 0), lineWidth: 2)
-                                            .padding(-4)
-                                    )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 7)
+                                                .strokeBorder(Color.primary.opacity(settings.palette == palette ? 0.9 : 0), lineWidth: 2)
+                                                .padding(-3)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .help(palette.help)
                             }
-                            .buttonStyle(.plain)
-                            .help(palette.help)
                         }
-                    }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 4)
-                    if settings.palette == .custom {
-                        CustomGradientEditor(settings: settings)
-                    }
-                    if settings.palette == .screen {
-                        ScreenColorOptions(settings: settings, screen: .shared)
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 3)
                     }
                 }
 
-                labeled("Color drift") {
-                    Picker("Color drift", selection: $settings.colorDrift) {
-                        ForEach(ColorDrift.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .disabled(settings.palette == .screen)
-                    .help(settings.palette == .screen ? "Screen colors follow the screen, so they don't drift"
-                                                      : "Slowly turns the colors around the color wheel while music plays")
-                }
-
-                labeled("Bands") {
-                    Picker("Bands", selection: $settings.bandCount) {
-                        ForEach(Settings.bandChoices, id: \.self) { Text("\($0)").tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .disabled(!settings.style.usesBands)
-                }
-
-                labeled("Opacity · \(Int((settings.opacity * 100).rounded()))%") {
-                    Slider(value: $settings.opacity, in: 0.15...1)
-                }
-
-                labeled("Sensitivity · \(sensitivityText)") {
-                    Slider(value: $settings.sensitivity, in: -12...12, step: 1)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    labeled("Brightness · \(Int((settings.brightness * 100).rounded()))%") {
-                        Slider(value: $settings.brightness, in: 0.3...2)
-                    }
-                    labeled("Low · Mid · High") {
-                        VStack(spacing: 2) {
-                            gainRow("Low", $settings.lowGain)
-                            gainRow("Mid", $settings.midGain)
-                            gainRow("High", $settings.highGain)
-                        }
-                    }
-                    if settings.style == .sparks {
-                        labeled("Spark power · \(Int((settings.sparkPower * 100).rounded()))%") {
-                            Slider(value: $settings.sparkPower, in: 0...1)
-                        }
-                    }
-                    Button("Reset Tuning") { settings.resetTuning() }
-                        .controlSize(.small)
+                labeled("Brightness · \(Int((settings.brightness * 100).rounded()))%") {
+                    Slider(value: $settings.brightness, in: 0.3...2)
                 }
             }
             .disabled(!settings.enabled)
 
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Auto level", isOn: $settings.autoLevel)
-                    .help("Adjusts to the loudness of what's playing so the bars always fill the menu bar.")
-                Toggle("Peak hold", isOn: $settings.showPeaks)
-                    .disabled(!settings.style.usesPeaks)
-                Toggle("Keep menu bar text readable", isOn: $settings.readableMenuBar)
-                    .help("Tones down bar colors bright enough to wash out the menu bar's text and icons (white bars behind white text). Only the menu bar changes; the edge glow keeps its full colors.")
-                Toggle("Screen edge glow", isOn: $settings.edgeGlow)
-                    .help("A soft glow along the edges of the screen.")
-                if settings.edgeGlow {
-                    HStack(spacing: 8) {
-                        Text("Depth")
-                            .font(.caption)
-                        Slider(value: $settings.edgeGlowDepth, in: Settings.edgeGlowDepthRange)
-                            .help("How far the glow reaches into the screen.")
-                        Text("\(Int(settings.edgeGlowDepth.rounded())) pt")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 42, alignment: .trailing)
-                    }
-                    .padding(.leading, 20)
-                    Toggle("Top edge too, below the menu bar", isOn: $settings.edgeGlowTop)
-                        .help("Also glows along the top of the screen, fading down from the menu bar.")
-                        .padding(.leading, 20)
-                }
-                Toggle("Show on all displays", isOn: $settings.allDisplays)
-                Toggle("Show over full-screen apps", isOn: $settings.showInFullScreen)
-                    .help("Keeps the screen edge glow on over apps in full screen.")
-                if settings.showInFullScreen {
-                    Toggle("Menu bar visuals too", isOn: $settings.fullScreenStrip)
-                        .help("In full screen, also draws the bars along the top, where the hidden menu bar would be. They step aside while you use the menu bar. Off: just the edge glow, on all sides.")
-                        .padding(.leading, 20)
-                }
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enable in setLaunchAtLogin(enable) }
-                if let loginError {
-                    Text(loginError).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.checkbox)
+            LightsRow(settings: .shared, hub: .shared)
+            VoiceRow(settings: .shared)
 
             Divider()
 
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Button("Quit Barbeat") { NSApp.terminate(nil) }
-                    HStack(spacing: 12) {
-                        Link("Help", destination: Credits.helpURL)
-                            .help("Opens Barbeat's guide in your browser")
-                        Link("♥ Support", destination: Credits.supportURL)
-                            .help("Ways to support Barbeat")
-                    }
-                    .font(.caption)
-                }
+            HStack {
+                Button("Settings…") { SettingsWindow.show() }
+                    .keyboardShortcut(",", modifiers: .command)
+                    .help("Every setting: Screen colors, look, sound, glow, lights, voice and more")
                 Spacer()
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("Made by \(Credits.author)")
-                    Text("\(Credits.handle) · v\(Credits.version)")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Link("Help", destination: Credits.helpURL)
+                    .font(.caption)
+                    .help("Opens Barbeat's guide in your browser")
+                Button("Quit") { NSApp.terminate(nil) }
             }
         }
         .padding(16)
         .frame(width: 320)
     }
 
-    private var sensitivityText: String { dbText(settings.sensitivity) }
-
-    private func dbText(_ value: Double) -> String {
-        let db = Int(value.rounded())
-        return db == 0 ? "0 dB" : String(format: "%+d dB", db)
-    }
-
-    private func gainRow(_ name: String, _ value: Binding<Double>) -> some View {
-        HStack(spacing: 8) {
-            Text(name)
-                .font(.caption)
-                .frame(width: 30, alignment: .leading)
-            Slider(value: value, in: -12...12, step: 1)
-            Text(dbText(value.wrappedValue))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 42, alignment: .trailing)
-        }
-    }
-
     private func labeled<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        labeled(title, accessory: { EmptyView() }, content: content)
-    }
-
-    private func labeled<Content: View, Accessory: View>(
-        _ title: String, @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content
-    ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(title).font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                accessory()
-            }
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
             content()
-        }
-    }
-
-    private func setLaunchAtLogin(_ enable: Bool) {
-        do {
-            if enable { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            loginError = nil
-        } catch {
-            loginError = "Couldn't change login item: \(error.localizedDescription)"
-            launchAtLogin = SMAppService.mainApp.status == .enabled
         }
     }
 }
 
-private struct StyleTile: View {
+struct StyleTile: View {
     let style: EQStyle
     let selected: Bool
+    var compact = false
+    /// Settings › Look: a picture of the style in the menu bar instead of its symbol.
+    var picture = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: style.symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(height: 18)
+            VStack(spacing: compact ? 3 : 4) {
+                if picture {
+                    BundledImage(name: "style-\(style.rawValue)")
+                        .aspectRatio(400.0 / 72.6, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .padding(.horizontal, 6)
+                } else {
+                    Image(systemName: style.symbol)
+                        .font(.system(size: compact ? 13 : 15, weight: .semibold))
+                        .frame(height: compact ? 15 : 18)
+                }
                 Text(style.title)
-                    .font(.caption)
+                    .font(compact ? .system(size: 9.5) : .caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, compact ? 6 : 8)
             .foregroundStyle(selected ? Color.accentColor : Color.primary)
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -330,7 +177,7 @@ enum Credits {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
 }
 
-private extension Palette {
+extension Palette {
     /// A symbol drawn on the swatch for palettes that aren't fixed colors.
     var badge: String? {
         switch self {
@@ -349,127 +196,13 @@ private extension Palette {
     }
 }
 
-/// The Screen palette's options, and what it's looking at.
-private struct ScreenColorOptions: View {
-    @ObservedObject var settings: Settings
-    @ObservedObject var screen: ScreenColors
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Picker("Screen colors", selection: $settings.screenColorMode) {
-                ForEach(ScreenColorMode.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            caption(settings.screenColorMode.subtitle)
-            Toggle("Follow light beams", isOn: $settings.screenBeams)
-                .toggleStyle(.checkbox)
-                .padding(.top, 2)
-                .help("Bright light that sweeps across the picture, like stage beams and flashes, takes over the colors as it passes.")
-            if settings.screenBeams {
-                HStack(spacing: 8) {
-                    Text("Strength")
-                        .font(.caption)
-                    Slider(value: $settings.screenBeamStrength, in: Settings.screenBeamStrengthRange)
-                        .help("How much of the glow a beam takes over, and how bright it gets.")
-                    Text("\(Int((settings.screenBeamStrength * 100).rounded()))%")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 42, alignment: .trailing)
-                }
-                .padding(.leading, 20)
-                caption(settings.screenColorMode == .ambient
-                        ? "Stage beams and flashes that sweep across the picture spill out of the screen in their own color."
-                        : "Stage beams and flashes that sweep across the picture tint the colors as they pass.")
-                    .padding(.leading, 20)
-            }
-            HStack(spacing: 6) {
-                Circle().fill(dotColor).frame(width: 7, height: 7)
-                Text(title).font(.caption)
-            }
-            .padding(.top, 2)
-            if let detail { caption(detail) }
-            if showsButtons {
-                HStack {
-                    if screen.state == .needsPermission {
-                        Button("Open Privacy Settings") {
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-                        }
-                    }
-                    Button(screen.state == .stoppedByUser ? "Start Again" : "Try Again") { screen.retry() }
-                }
-                .controlSize(.small)
-            }
-        }
-        .padding(.top, 4)
-    }
-
-    private var title: String {
-        switch screen.state {
-        case .off, .starting: return "Starting…"
-        case .needsPermission: return "Barbeat needs permission to see the screen"
-        case .watchingScreen: return "Watching the whole screen"
-        case .watchingWindow(let name): return name.isEmpty ? "Watching the app's window" : "Watching \(name)'s window"
-        case .dark: return "The screen looks black"
-        case .stoppedByUser: return "Stopped from the menu bar"
-        case .failed: return "Couldn't watch the screen"
-        case .testImage: return "Using a test picture"
-        }
-    }
-
-    private var detail: String? {
-        let privacy = "Frames are read live and never saved. macOS shows a recording icon in the menu bar while this is on."
-        switch screen.state {
-        case .needsPermission:
-            return "Allow Barbeat under Privacy & Security › Screen & System Audio Recording, then click Try Again. macOS may ask to reopen Barbeat."
-        case .watchingScreen:
-            if settings.audioSource == .app, !settings.sourceAppName.isEmpty {
-                return "\(settings.sourceAppName) has no window showing, so Barbeat watches the whole screen. " + privacy
-            }
-            return privacy
-        case .watchingWindow:
-            return "Only this window, because it's what you're listening to. " + privacy
-        case .dark:
-            return "Copy-protected video (Netflix, Apple TV+, Disney+) shows up black, so the last colors stay."
-        case .stoppedByUser:
-            return "Screen colors are paused until you start them again."
-        case .failed(let message):
-            return message
-        default:
-            return nil
-        }
-    }
-
-    private var showsButtons: Bool {
-        switch screen.state {
-        case .needsPermission, .stoppedByUser, .failed: return true
-        default: return false
-        }
-    }
-
-    private var dotColor: Color {
-        switch screen.state {
-        case .watchingScreen, .watchingWindow, .testImage: return .green
-        case .off, .starting, .dark, .stoppedByUser: return .yellow
-        case .needsPermission, .failed: return .red
-        }
-    }
-
-    private func caption(_ text: String) -> some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
 private struct PanelHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// System audio, one app, or an input device.
-private struct SourcePicker: View {
+struct SourcePicker: View {
     @ObservedObject var settings: Settings
     @ObservedObject var list: AudioSourceList
 
@@ -566,7 +299,7 @@ private struct SourcePicker: View {
     }
 }
 
-private struct StatusLine: View {
+struct StatusLine: View {
     @ObservedObject var status: AudioStatus
 
     private var state: AudioStatus.State { status.state }
@@ -656,5 +389,26 @@ private struct StatusLine: View {
         case .off, .noMenuBar: return .gray
         case .failed, .microphoneDenied: return .red
         }
+    }
+}
+
+/// "Check for Updates…" in the panel footer; says what it's doing while busy.
+struct UpdateLink: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        Group {
+            switch updater.state {
+            case .checking: Text("Checking for updates…")
+            case .downloading: Text("Downloading the update…")
+            case .installing: Text("Installing…")
+            case .idle, .failed:
+                Button("Check for Updates…") { updater.check(manual: true) }
+                    .buttonStyle(.link)
+                    .help("Looks for a newer Barbeat on GitHub")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }

@@ -50,6 +50,16 @@ struct FlashMeter {
     }
 }
 let pulseShow = LightShow(), bandShow = LightShow()
+// Worst case for sparkles: 9 lights in Bands, every light allowed to sparkle, the shortest fade.
+let sparkleShow = LightShow()
+var sparkleOptions = LightShow.Options()
+sparkleOptions.sparkles = true
+sparkleOptions.maxSparkles = 9
+sparkleOptions.sparkleFade = 0.1
+var sparkleMeters = [FlashMeter](repeating: FlashMeter(), count: 9)
+var sparkleWhite = [Bool](repeating: false, count: 9)
+var sparkleCount = 0
+var sparkleLine = ""
 var pulseMeter = FlashMeter()
 var bandMeters = [FlashMeter](repeating: FlashMeter(), count: 3)
 var bandLines = ["", "", ""]
@@ -91,11 +101,22 @@ while pos + step < frames {
         if bandMeters[i].events.count > before { flashTotal[i] += 1 }
     }
 
+    let nine = sparkleShow.frame(slots: LightSlot.row(9), signals: signals, palette: palette, options: sparkleOptions, dt: 1 / 60)
+    var whites = 0
+    for i in 0..<9 {
+        sparkleMeters[i].add(nine[i].brightness, at: time)
+        let white = min(nine[i].r, nine[i].g, nine[i].b) > 0.9
+        if white && !sparkleWhite[i] { sparkleCount += 1 }
+        sparkleWhite[i] = white
+        if white { whites += 1 }
+    }
+
     // 4 seconds of timeline starting at 20 s, every other frame.
     if frame >= 1200, frame < 1440, frame % 2 == 0 {
         pulseLine.append(sparkChar(pulse))
         meterLine.append(sparkChar(analyzer.meterLeft))
         for i in 0..<3 { bandLines[i].append(sparkChar(three[i].brightness)) }
+        sparkleLine.append(sparkChar(Float(whites) / 9))
     }
 }
 
@@ -114,3 +135,6 @@ for (i, name) in ["low ", "mid ", "high"].enumerated() {
     print("light  bands \(name)      \(bandMeters[i].summary)  flashes/min \(Int(Double(flashTotal[i]) / minutes))")
 }
 for (i, name) in ["low ", "mid ", "high"].enumerated() { print("bands  \(name) 20-24s \(bandLines[i])") }
+let sparkleWorst = sparkleMeters.map(\.worst).max() ?? 0
+print("light  sparkles (9 lights, max 9, 0.1 s)  flashes/s max \(sparkleWorst) per light  sparkles/min \(Int(Double(sparkleCount) / minutes))")
+print("sparkles 20-24s \(sparkleLine)  (share of lights white)")

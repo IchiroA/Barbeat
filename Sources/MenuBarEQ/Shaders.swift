@@ -28,7 +28,13 @@ enum ShaderParam {
     static let edgeRun = 58
     /// Keep menu bar text readable: 0 off, 1 the menu bar's text is light, 2 it's dark.
     static let textGuard = 59
-    static let count = 60
+    /// Bar styles: columns per band (1 or more). Screens wider than 16:9 get extra columns in between the bands,
+    /// so bars keep a normal width instead of stretching.
+    static let barColumns = 60
+    /// Voice: its color (r, g, b), how far it spreads out from the middle of the screen (0...1, 1 = everywhere),
+    /// and the menu bar glow's strength (0...1). Uses `ambientRect` for where this window sits on its screen.
+    static let voiceColor = 61, voiceTint = 64, voiceGlow = 65
+    static let count = 66
 
     /// Band buffer: levels for mid/left/right, then peaks for mid/left/right.
     static let maxBands = 128
@@ -105,6 +111,10 @@ enum Shaders {
     constant int P_AMBIENT_RECT = \(ShaderParam.ambientRect);
     constant int P_EDGE_RUN = \(ShaderParam.edgeRun);
     constant int P_TEXT_GUARD = \(ShaderParam.textGuard);
+    constant int P_BAR_COLUMNS = \(ShaderParam.barColumns);
+    constant int P_VOICE_COLOR = \(ShaderParam.voiceColor);
+    constant int P_VOICE_TINT = \(ShaderParam.voiceTint);
+    constant int P_VOICE_GLOW = \(ShaderParam.voiceGlow);
     constant int MAX_BANDS = \(ShaderParam.maxBands);
     constant int AMBIENT_COLUMNS = \(ScreenColors.columns);
     constant int AMBIENT_ROWS = \(ScreenColors.rows);
@@ -197,7 +207,19 @@ enum Shaders {
     }
 
     static float levelOf(constant float *B, int channel, int band) { return B[channel * MAX_BANDS + band]; }
-    static float peakOf(constant float *B, int channel, int band) { return B[(3 + channel) * MAX_BANDS + band]; }
+
+    // A level between bands (pos 0...count-1, row 0-2 levels, 3-5 peaks): a smooth curve through the neighbouring
+    // bands that never goes above or below the two it sits between, so in-between bars add no fake peaks.
+    static float bandCurve(constant float *B, int row, int count, float pos) {
+        int i1 = clamp(int(floor(pos)), 0, count - 1);
+        float t = clamp(pos - float(i1), 0.0, 1.0);
+        int i2 = min(i1 + 1, count - 1);
+        constant float *b = B + row * MAX_BANDS;
+        float p0 = b[max(i1 - 1, 0)], p1 = b[i1], p2 = b[i2], p3 = b[min(i1 + 2, count - 1)];
+        float v = 0.5 * (2.0 * p1 + (p2 - p0) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+                         + (3.0 * (p1 - p2) + p3 - p0) * t * t * t);
+        return clamp(v, min(p1, p2), max(p1, p2));
+    }
 
     // Level at position u (0...1) along a channel's bands, interpolated.
     static float bandLevelAt(constant float *B, int channel, int count, float u) {
@@ -478,18 +500,21 @@ enum Shaders {
             return float4(0.0);
         }
 
-        // Bar styles: find the column under this pixel (edges snapped to whole pixels).
+        // Bar styles: find the column under this pixel (edges snapped to whole pixels). On ultrawide screens
+        // there are more columns than bands; the extra ones show levels in between their neighbours.
         float px = 1.0 / scale;
-        float slot = width / float(r.count);
-        int j = clamp(int((x - r.x0) / slot), 0, r.count - 1);
+        int columns = max(r.count, int(round(float(r.count) * max(1.0, P[P_BAR_COLUMNS]))));
+        float slot = width / float(columns);
+        int j = clamp(int((x - r.x0) / slot), 0, columns - 1);
         float gap = max(px, snapTo(min(slot * 0.22, 5.0), scale));
         float cx0 = snapTo(r.x0 + float(j) * slot + gap / 2.0, scale);
         float cx1 = max(cx0 + px, snapTo(r.x0 + float(j + 1) * slot - gap / 2.0, scale));
         if (x < cx0 || x >= cx1) return float4(0.0);
-        int band = r.mirrored ? r.count - 1 - j : j;
-        float hue = r.count > 1 ? float(band) / float(r.count - 1) : 0.0;
-        float level = levelOf(B, r.channel, band);
-        float peak = peakOf(B, r.channel, band);
+        int k = r.mirrored ? columns - 1 - j : j;   // bass first
+        float pos = clamp((float(k) + 0.5) / float(columns) * float(r.count) - 0.5, 0.0, float(r.count - 1));
+        float hue = r.count > 1 ? pos / float(r.count - 1) : 0.0;
+        float level = bandCurve(B, r.channel, r.count, pos);
+        float peak = bandCurve(B, 3 + r.channel, r.count, pos);
 
         if (style == STYLE_LED) {
             float rowsF = P[P_LED_ROWS];
@@ -540,6 +565,19 @@ enum Shaders {
         return float4(0.0);
     }
 
+    // Blending two opposite colors (teal and gold, say) passes through grey; this puts back the saturation
+    // the two colors have between them, keeping the blend's hue and brightness.
+    static float3 keepSaturation(float3 mixed, float3 a, float3 b, float t) {
+        float v = max(mixed.r, max(mixed.g, mixed.b));
+        if (v < 0.0001) return mixed;
+        float s = (v - min(mixed.r, min(mixed.g, mixed.b))) / v;
+        float sa = (max(a.r, max(a.g, a.b)) - min(a.r, min(a.g, a.b))) / max(0.0001, max(a.r, max(a.g, a.b)));
+        float sb = (max(b.r, max(b.g, b.b)) - min(b.r, min(b.g, b.b))) / max(0.0001, max(b.r, max(b.g, b.b)));
+        float want = mix(sa, sb, t);
+        if (s < 0.0001) return mixed;
+        return clamp(v - (v - mixed) * (want / s), 0.0, v);
+    }
+
     // Keep menu bar text readable: under light (white) menu bar text, colors bright enough to wash it out are eased
     // down (white and yellow the most; reds, blues and purples hardly at all). Under dark text, the darkest colors
     // are lifted instead. Works on straight (not premultiplied) color.
@@ -575,6 +613,34 @@ enum Shaders {
             float y = H - in.position.y / P[P_SCALE];
             float w = C.beam * 0.4 * mix(1.0, 0.35, clamp(y / H, 0.0, 1.0));
             c += float4(C.here * w, w) * (1.0 - c.a);
+        }
+        // Voice: the voice's color spreads out from the middle of the screen while someone sings, further with
+        // louder singing (each pixel keeps its own brightness). In the menu bar a soft glow swells out of the middle
+        // with each word, behind the bars.
+        float3 voice = float3(P[P_VOICE_COLOR], P[P_VOICE_COLOR + 1], P[P_VOICE_COLOR + 2]);
+        float reach = P[P_VOICE_TINT] * 1.05;
+        if (reach > 0.001 && c.a > 0.0001) {
+            float across = clamp(in.position.x / P[P_SCALE] / max(1.0, P[P_WIDTH]), 0.0, 1.0);
+            float u = mix(P[P_AMBIENT_RECT], P[P_AMBIENT_RECT + 1], across);   // 0...1 across the screen
+            float cover = 1.0 - smoothstep(reach - 0.12, reach, abs(u - 0.5) * 2.0);
+            if (cover > 0.001) {
+                float3 straight = c.rgb / c.a;
+                float level = max(straight.r, max(straight.g, straight.b));
+                float3 toward = voice * (level / max(0.001, max(voice.r, max(voice.g, voice.b))));
+                c.rgb = keepSaturation(mix(straight, toward, cover), straight, toward, cover) * c.a;
+            }
+        }
+        float glow = P[P_VOICE_GLOW];
+        if (int(P[P_EDGE_MODE]) == 0 && glow > 0.001) {
+            float H = P[P_HEIGHT];
+            float x = in.position.x / P[P_SCALE];
+            float y = H - in.position.y / P[P_SCALE];
+            float lo = P[P_GAP_LO], hi = P[P_GAP_HI];
+            float d = max(0.0, abs(x - (lo + hi) * 0.5) - (hi - lo) * 0.5);   // from the notch's edge, or the middle
+            float reach = 30.0 + glow * P[P_WIDTH] * 0.16;
+            float g = glow * exp(-d / reach) * mix(1.0, 0.55, clamp(y / H, 0.0, 1.0));
+            c += float4(voice * g, g) * (1.0 - 0.6 * c.a);
+            c = float4(min(c.rgb, float3(1.0)), min(c.a, 1.0));
         }
         float brightness = P[P_BRIGHTNESS];
         float a = min(1.0, c.a * brightness);

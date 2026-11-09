@@ -357,8 +357,19 @@ final class ArtNetOutput: LightOutput {
         }
     }
 
+    var endWithLightsOff = false
+
     func giveBack(completion: @escaping () -> Void) {
         resolving += 1
+        if endWithLightsOff {
+            // Sleep timer: black, and WLED switched off so it doesn't go back to its own effect.
+            endWithLightsOff = false
+            if !lastFrame.isEmpty { transmit(lastFrame.map { _ in .off }) }
+            Self.switchOffWLED(host: device.host)
+            state = .idle
+            completion()
+            return
+        }
         guard state == .live, !lastFrame.isEmpty else {
             state = .idle
             completion()
@@ -388,6 +399,17 @@ final class ArtNetOutput: LightOutput {
                 }
             }
         }
+    }
+
+    /// Asks a WLED at `host` to switch off (its JSON API). Anything else just doesn't answer.
+    static func switchOffWLED(host: String) {
+        let address = host.trimmingCharacters(in: .whitespaces)
+        guard !address.isEmpty, let url = URL(string: "http://\(address)/json/state") else { return }
+        var request = URLRequest(url: url, timeoutInterval: 3)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data(#"{"on":false}"#.utf8)
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
     }
 
     /// Quitting: no timers will run, so do the device's stop action right away.

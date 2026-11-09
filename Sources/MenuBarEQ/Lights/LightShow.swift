@@ -83,6 +83,9 @@ struct LightPalette {
     var byFrequency: Bool
     /// Screen › Ambient light: the colors along the top of the screen, left to right.
     var ambient: [SIMD3<Float>]?
+    /// Screen colors' light beams along the screen, left to right: the beam's color (rgb) and how strongly it
+    /// lights that spot (w, 0...1). Nil when beams don't go to the lights.
+    var beams: [SIMD4<Float>]? = nil
 
     static let neon = LightPalette(stops: [(0, SIMD3(0, 0.9, 1)), (0.5, SIMD3(0.55, 0.35, 1)), (1, SIMD3(1, 0.2, 0.75))],
                                    byFrequency: true, ambient: nil)
@@ -99,6 +102,17 @@ struct LightPalette {
             previous = stop
         }
         return previous.color
+    }
+
+    /// The strongest light beam around `u` (0 = left edge, 1 = right edge), if any.
+    func beam(at u: Float) -> SIMD4<Float>? {
+        guard let beams, !beams.isEmpty else { return nil }
+        let n = beams.count
+        let center = min(Float(n - 1), max(0, u * Float(n - 1)))
+        let i0 = max(0, Int(center) - 1), i1 = min(n - 1, Int(center) + 1)
+        var best = beams[i0]
+        for i in i0...i1 where beams[i].w > best.w { best = beams[i] }
+        return best.w > 0.01 ? best : nil
     }
 
     /// Ambient light: the average screen color around `u` (0 = left edge, 1 = right edge).
@@ -127,6 +141,9 @@ struct LightSignals {
     }
 
     var mid = Channel(), left = Channel(), right = Channel()
+    /// The voice right now (0...1), and how hard a word starts this frame (else 0).
+    var voice: Float = 0
+    var word: Float = 0
     /// Seconds since anything was heard.
     var silence: Double = .infinity
     /// The menu bar splits left/right around the notch (Stereo layout), so Mirror does too.
@@ -144,6 +161,25 @@ final class LightShow {
         var maxBrightness: Float = 1
         /// macOS "Reduce motion": softer flashes.
         var reduceFlashing = false
+        /// The two halves match, mirrored around the middle (Bands, Mirror and the sparkles).
+        var mirror = false
+        /// Mirror with bass at both ends and treble in the middle (else bass in the middle).
+        var mirrorFromEnds = false
+        /// White sparkles on random lights with every beat.
+        var sparkles = false
+        /// The most sparkles showing at once (a mirrored pair counts as one).
+        var maxSparkles = 3
+        /// Seconds a sparkle takes to fade out.
+        var sparkleFade: Float = 0.4
+        /// Voice: how far `voiceColor` spreads out from the middle lights while someone sings (0 = off, 1 = all).
+        var voiceTint: Float = 0
+        var voiceColor = SIMD3<Float>(1, 0.8, 0.3)
+        /// Voice: the lights' brightness follows the singer instead of the music.
+        var followVoice = false
+        /// Voice: sparkles on words (with the same Max sparkles and Fade).
+        var wordSparkles = false
+        /// Screen colors' light beams flash the lights next to them, in the beam's color (0 = off, 1 = full).
+        var beamFlash: Float = 0
     }
 
     /// The mode in use (what Auto picked).
@@ -161,6 +197,10 @@ final class LightShow {
     private var color: [SIMD3<Float>] = []
     private var lows: [Float] = []        // each light's brightness where it last bottomed out
     private var rises: [[Double]] = []    // times of each light's large flashes in the last second (safety cap)
+    private var byRank: [Int] = []        // the slot at each place from left to right
+    private var sparkle: [Float] = []     // each light's white sparkle, 1 = just lit, fading to 0
+    private var beatArmed = true          // the bass dropped since the last beat (sparkles fire on the rise)
+    private var sparkleCooldown: Float = 0
     private var clock: Double = 0
     private var rest: Float = 1           // 0 = music playing, 1 = resting glow
 
@@ -212,10 +252,16 @@ final class LightShow {
                 smooth[i] = false
             }
         case .bands:
-            let slices = sliceLevels(s.mid.levels, count: n, dt: dtf)
+            // Mirror: lights pair up around the middle, so half as many slices, each shown twice.
+            let places = o.mirror ? (n + 1) / 2 : n
+            let slices = sliceLevels(s.mid.levels, count: places, dt: dtf)
             for i in 0..<n {
-                let r = rank[i]
-                let t: Float = n > 1 ? Float(r) / Float(n - 1) : 0
+                var r = rank[i]
+                if o.mirror {
+                    let out = Int(abs(Float(r) - Float(n - 1) / 2))   // 0 in the middle
+                    r = o.mirrorFromEnds ? places - 1 - out : out
+                }
+                let t: Float = places > 1 ? Float(r) / Float(places - 1) : 0
                 drives[i] = slices[r].level
                 tones[i] = t
                 // Bass lights swell and fade slowly, treble lights sparkle; every light gets some of the kick.
@@ -227,7 +273,12 @@ final class LightShow {
                 let u = spot[i]
                 let channel: LightSignals.Channel
                 let p: Float
-                if s.stereoLayout {
+                if o.mirror {
+                    // Both halves show the same bars: from the middle out, or from both ends in.
+                    channel = s.mid
+                    let out = abs(u - 0.5) * 2
+                    p = o.mirrorFromEnds ? 1 - out : out
+                } else if s.stereoLayout {
                     channel = u < 0.5 ? s.left : s.right
                     p = abs(u - 0.5) * 2   // bass at the center, like the bars around the notch
                 } else {
@@ -238,6 +289,15 @@ final class LightShow {
                 tones[i] = p
                 hits[i] = roomKick * 0.25
                 smooth[i] = false
+            }
+        }
+
+        if o.followVoice {
+            // The singer leads: every light rides the voice, with a little of the music underneath.
+            for i in 0..<n {
+                drives[i] = max(drives[i] * 0.25, s.voice)
+                smooth[i] = false
+                hits[i] *= 0.5
             }
         }
 
@@ -270,27 +330,104 @@ final class LightShow {
             color[i] += (target - color[i]) * (1 - pow(0.75, dtf * 60))
         }
 
+        updateSparkles(signals: s, options: o, dt: dtf)
+        let sparklePeak: Float = o.reduceFlashing ? 0.6 : 1
         let floor = o.baseGlow * (0.7 + 0.3 * (1 - rest))
         for i in 0..<n {
             var b = floor + (1 - floor) * min(1, envelope[i] * 0.8 + flash[i] * 0.7)
             if b < brightness[i] { b = max(b, brightness[i] - maxFall * dtf) }
+            // A sparkle lights the light up in white and fades at its own pace, on top of the music.
+            var shown = max(b, sparkle[i] * sparklePeak)
+            // A light beam on screen next to this light lights it up too, even in a quiet moment.
+            let beam = o.beamFlash > 0 ? palette.beam(at: spot[i]) : nil
+            if let beam { shown = max(shown, min(1, beam.w * 1.2) * o.beamFlash * (o.reduceFlashing ? 0.6 : 1)) }
             // Safety: a large flash is a rise of 30 points or more from where the light last bottomed out.
-            // A light gets at most 3 a second; beyond that it rises only partway.
-            lows[i] = min(lows[i], b)
-            if b - lows[i] >= Self.flashSize {
+            // A light gets at most 3 a second; beyond that it rises only partway (and drops its sparkle).
+            lows[i] = min(lows[i], shown)
+            if shown - lows[i] >= Self.flashSize {
                 rises[i].removeAll { clock - $0 > 1.05 }
                 if rises[i].count >= Self.maxFlashesPerSecond {
-                    b = lows[i] + Self.flashSize - 0.01
+                    shown = lows[i] + Self.flashSize - 0.01
+                    sparkle[i] = 0
                 } else {
                     rises[i].append(clock)
-                    lows[i] = b
+                    lows[i] = shown
                 }
             }
-            brightness[i] = b
-            let c = color[i]
-            out[i] = LightColor(r: c.x, g: c.y, b: c.z, brightness: min(1, b) * o.maxBrightness)
+            brightness[i] = min(b, shown)
+            var c = color[i]
+            if o.voiceTint > 0.001 {
+                // Voice color, spreading out from the middle lights, keeping each light's own brightness.
+                let reach = o.voiceTint * 1.05, d = abs(spot[i] - 0.5) * 2
+                let t = min(1, max(0, (d - (reach - 0.15)) / 0.15))
+                let cover = 1 - t * t * (3 - 2 * t)
+                if cover > 0.001 {
+                    let level = max(c.x, c.y, c.z), top = max(0.001, max(o.voiceColor.x, o.voiceColor.y, o.voiceColor.z))
+                    c = Self.blendKeepingSaturation(c, o.voiceColor * (level / top), cover)
+                }
+            }
+            if let beam {
+                let beamColor = SIMD3(beam.x, beam.y, beam.z)
+                c = Self.blendKeepingSaturation(c, beamColor, min(1, beam.w * 1.25 * o.beamFlash))
+            }
+            if sparkle[i] > 0 { c += (SIMD3(repeating: 1) - c) * min(1, sparkle[i] * sparklePeak) }
+            out[i] = LightColor(r: c.x, g: c.y, b: c.z, brightness: min(1, shown) * o.maxBrightness)
         }
         return out
+    }
+
+    /// White sparkles: on each beat a few random lights flash white, then fade out over `sparkleFade` seconds.
+    /// Harder beats light more of them, never more than `maxSparkles` at once. With Mirror they come in pairs.
+    private func updateSparkles(signals s: LightSignals, options o: Options, dt: Float) {
+        let n = count
+        let fade = exp(-dt * 3 / max(0.05, o.sparkleFade))   // about 95% gone after the fade time
+        for i in 0..<n {
+            sparkle[i] *= fade
+            if sparkle[i] < 0.02 { sparkle[i] = 0 }
+        }
+
+        // A beat: the bass jumps above its recent level. Fires once per hit, on the way up.
+        sparkleCooldown -= dt
+        let kick = s.mid.kick
+        if kick < 0.04 { beatArmed = true }
+        guard sparkleCooldown <= 0, rest < 0.5 else { return }
+        var strength: Float = 0
+        if o.sparkles, beatArmed, kick > 0.05 {
+            beatArmed = false
+            strength = min(1, kick * 2.5)
+        }
+        // Voice: a word starting lights sparkles too.
+        if o.wordSparkles, s.word > 0 { strength = max(strength, s.word) }
+        guard strength > 0 else { return }
+        sparkleCooldown = 0.12
+
+        // Places that can sparkle: single lights, or with Mirror the same place counted from both ends.
+        let places = o.mirror ? (n + 1) / 2 : n
+        func lights(at place: Int) -> [Int] {
+            guard o.mirror else { return [byRank[place]] }
+            let a = byRank[place], b = byRank[n - 1 - place]
+            return a == b ? [a] : [a, b]
+        }
+        func atFlashLimit(_ light: Int) -> Bool {
+            rises[light].filter { clock - $0 <= 1.05 }.count >= Self.maxFlashesPerSecond
+        }
+        var showing = 0
+        var free: [Int] = []
+        for place in 0..<places {
+            let group = lights(at: place)
+            if group.contains(where: { sparkle[$0] > 0.2 }) {
+                showing += 1
+            } else if !group.contains(where: atFlashLimit) {   // skip lights that already flashed 3 times this second
+                free.append(place)
+            }
+        }
+        let limit = min(places, max(1, o.maxSparkles))
+        let wanted = max(1, Int((Float(limit) * (0.4 + 0.6 * strength)).rounded()))
+        let new = min(free.count, wanted, limit - showing)
+        guard new > 0 else { return }
+        for place in free.shuffled().prefix(new) {
+            for light in lights(at: place) { sparkle[light] = 1 }
+        }
     }
 
     /// Orders the lights from left to right (ties go front to back), and spreads them over the whole width.
@@ -302,6 +439,8 @@ final class LightShow {
         }
         rank = Array(repeating: 0, count: n)
         for (r, i) in order.enumerated() { rank[i] = r }
+        byRank = order
+        sparkle = Array(repeating: 0, count: n)
         let xs = slots.map(\.x)
         let lo = xs.min() ?? -1, hi = xs.max() ?? 1
         spot = slots.map { hi - lo > 0.05 ? Float(($0.x - lo) / (hi - lo)) : 0.5 }
@@ -338,6 +477,21 @@ final class LightShow {
             sliceAverage[k] += (level - sliceAverage[k]) * (1 - pow(0.9, dt * 60))
             return (level, hit)
         }
+    }
+
+    /// Blends two colors without passing through grey (teal to gold, say): keeps the blend's hue and brightness
+    /// and puts back the saturation the two colors have between them.
+    static func blendKeepingSaturation(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ t: Float) -> SIMD3<Float> {
+        func saturation(_ c: SIMD3<Float>) -> Float {
+            let v = c.max()
+            return v > 0.0001 ? (v - c.min()) / v : 0
+        }
+        let mixed = a + (b - a) * t
+        let v = mixed.max(), s = saturation(mixed)
+        guard v > 0.0001, s > 0.0001 else { return mixed }
+        let want = saturation(a) + (saturation(b) - saturation(a)) * t
+        let out = SIMD3<Float>(repeating: v) - (SIMD3<Float>(repeating: v) - mixed) * (want / s)
+        return out.clamped(lowerBound: SIMD3<Float>(repeating: 0), upperBound: SIMD3<Float>(repeating: v))
     }
 
     /// A bar height at `p` (0 = bass ... 1 = treble), blended between neighbouring bars.

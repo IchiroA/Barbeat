@@ -10,6 +10,8 @@ final class SampleRingBuffer {
     private let lock: UnsafeMutablePointer<os_unfair_lock>
     private var writeIndex = 0
     private var lastWrite: UInt64 = 0
+    /// Every sample ever written, so a reader can pick up exactly where it left off.
+    private var written: UInt64 = 0
 
     init(capacity: Int) {
         self.capacity = capacity
@@ -56,6 +58,7 @@ final class SampleRingBuffer {
             right[writeIndex] = r[frame * rStride]
             writeIndex = (writeIndex + 1) % capacity
         }
+        written &+= UInt64(frames)
         lastWrite = mach_absolute_time()
         os_unfair_lock_unlock(lock)
     }
@@ -68,6 +71,7 @@ final class SampleRingBuffer {
             right[writeIndex] = r[i]
             writeIndex = (writeIndex + 1) % capacity
         }
+        written &+= UInt64(max(0, count))
         lastWrite = mach_absolute_time()
         os_unfair_lock_unlock(lock)
     }
@@ -86,6 +90,25 @@ final class SampleRingBuffer {
             (outR + firstPart).update(from: right, count: count - firstPart)
         }
         os_unfair_lock_unlock(lock)
+    }
+
+    /// Copies the mono mix of everything written since `cursor` (at most `limit` samples, and never more than the
+    /// buffer holds) and moves the cursor on. Returns how many were copied and the stream position of the first.
+    func readNew(since cursor: inout UInt64, into out: UnsafeMutablePointer<Float>, limit: Int) -> (count: Int, position: UInt64) {
+        os_unfair_lock_lock(lock)
+        defer { os_unfair_lock_unlock(lock) }
+        let available = written &- cursor
+        let count = Int(min(available, UInt64(min(limit, capacity))))
+        cursor = written
+        guard count > 0 else { return (0, written) }
+        var index = writeIndex - count
+        if index < 0 { index += capacity }
+        for i in 0..<count {
+            out[i] = (left[index] + right[index]) * 0.5
+            index += 1
+            if index == capacity { index = 0 }
+        }
+        return (count, written &- UInt64(count))
     }
 
     /// Seconds since the audio thread last delivered samples.

@@ -27,6 +27,8 @@ protocol LightOutput: AnyObject {
     var maxRate: Double { get }
     var state: LightOutputState { get }
     var onChange: (() -> Void)? { get set }
+    /// The next give-back leaves the lights off instead of how they were (the sleep timer).
+    var endWithLightsOff: Bool { get set }
     func takeOver()
     func send(_ colors: [LightColor])
     /// Must work in any state, and call `completion` once the lights are back as they were.
@@ -45,6 +47,7 @@ final class PreviewOutput: LightOutput {
     private(set) var slots: [LightSlot]
     let maxRate = 60.0
     var onChange: (() -> Void)?
+    var endWithLightsOff = false
     private(set) var state: LightOutputState = .idle { didSet { if state != oldValue { onChange?() } } }
 
     init(id: String, count: Int) {
@@ -92,6 +95,10 @@ final class LightHub: ObservableObject {
     var isHoldingLights: Bool { outputs.contains { [.live, .connecting, .givingBack].contains($0.state) } }
     /// Barbeat is quitting: never take the lights over again.
     var closing = false
+    /// Sleep timer: when the lights fade out and switch off.
+    @Published private(set) var sleepUntil: Date?
+    private var sleepLength: TimeInterval = 0
+    private var sleepTimer: Timer?
     /// Tells the overlay controller to start or stop listening.
     var onActiveChange: (() -> Void)?
 
@@ -182,6 +189,7 @@ final class LightHub: ObservableObject {
             shows[gone.id] = nil
             preview[gone.id] = nil
             if !settings.isOn(gone.id) { settings.setOn(true, gone.id) }
+            if settings.effects[gone.id] != nil { settings.effects[gone.id] = nil }
         }
         outputs = next
     }
@@ -204,21 +212,37 @@ final class LightHub: ObservableObject {
     // MARK: - Every frame
 
     /// Called by the render loop every frame while Barbeat is listening.
-    func tick(analyzer: SpectrumAnalyzer, sound: Float, dt: Double, colors: FrameColors, stereoLayout: Bool) {
+    func tick(analyzer: SpectrumAnalyzer, sound: Float, dt: Double, colors: FrameColors, stereoLayout: Bool,
+              voice: VoiceFrame, voiceOn: Bool) {
         let now = CACurrentMediaTime()
         silence = sound > 0.0005 ? 0 : silence + dt
         guard isActive || previewWanted, !outputs.isEmpty else { return }
 
-        let signals = LightSignals(analyzer: analyzer, silence: silence, stereoLayout: stereoLayout)
-        let palette = LightPalette(colors)
+        var signals = LightSignals(analyzer: analyzer, silence: silence, stereoLayout: stereoLayout)
+        signals.voice = voiceOn ? voice.level : 0
+        signals.word = voiceOn ? voice.word : 0
+        var palette = LightPalette(colors)
+        let app = Settings.shared
+        if app.screenColors, app.screenBeams, app.screenBeamsToLights,
+           let screen = ScreenColors.shared.colors(for: NSScreen.screens.first?.displayID) {
+            palette.beams = Self.beams(screen)
+        }
         var options = settings.showOptions
+        options.beamFlash = palette.beams == nil ? 0 : 1
+        options.maxBrightness *= sleepFade
         options.reduceFlashing = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if voiceOn, VoiceSettings.shared.onLights {
+            options.voiceTint = voice.tint
+            options.voiceColor = SIMD3(Float(voice.color.r), Float(voice.color.g), Float(voice.color.b))
+        }
 
         var frames: [String: [LightColor]] = [:]
         for output in outputs {
             let show = shows[output.id] ?? LightShow()
             shows[output.id] = show
-            var frame = show.frame(slots: output.slots, signals: signals, palette: palette, options: options, dt: dt)
+            var deviceOptions = options
+            deviceOptions.apply(settings.effects(for: output.id), lightCount: output.slots.count, voice: voiceOn)
+            var frame = show.frame(slots: output.slots, signals: signals, palette: palette, options: deviceOptions, dt: dt)
             if let until = identifyUntil[output.id] {
                 if now < until { frame = frame.map { _ in .white } } else { identifyUntil[output.id] = nil }
             }
@@ -265,6 +289,11 @@ final class LightHub: ObservableObject {
             guard want else {
                 let why = !settings.isOn(output.id) ? "switched off" : isActive ? "music stopped" : "lights off"
                 note("\(output.title): giving back (\(why))")
+                // With the sleep timer running, the music ending is bedtime too: the lights end off.
+                if sleepUntil != nil {
+                    output.endWithLightsOff = true
+                    DispatchQueue.main.async { [weak self] in self?.sleepNow() }
+                }
                 output.giveBack {}
                 return
             }
@@ -302,6 +331,42 @@ final class LightHub: ObservableObject {
             default: break
             }
         }
+    }
+
+    // MARK: - Sleep timer
+
+    /// Fades the lights out over the last minute, then switches Lights off with the lights left off.
+    func startSleep(minutes: Double) {
+        sleepTimer?.invalidate()
+        sleepLength = minutes * 60
+        let until = Date().addingTimeInterval(sleepLength)
+        sleepUntil = until
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: sleepLength, repeats: false) { [weak self] _ in self?.sleepNow() }
+        note("sleep timer: lights off in \(Int(minutes)) min")
+    }
+
+    func cancelSleep() {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        sleepUntil = nil
+        note("sleep timer cancelled")
+    }
+
+    /// 1, falling to 0 over the last minute (or the last quarter of a short timer).
+    private var sleepFade: Float {
+        guard let sleepUntil else { return 1 }
+        let fade = min(60, sleepLength / 4)
+        return Float(min(1, max(0, sleepUntil.timeIntervalSinceNow / max(1, fade))))
+    }
+
+    private func sleepNow() {
+        guard sleepUntil != nil else { return }
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        sleepUntil = nil
+        note("sleep timer: lights off")
+        for output in outputs where output.kind != "Preview" { output.endWithLightsOff = true }
+        settings.enabled = false
     }
 
     // MARK: - Status
@@ -375,6 +440,24 @@ final class LightHub: ObservableObject {
         let args = CommandLine.arguments
         guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
         return args[i + 1]
+    }
+}
+
+extension LightHub {
+    /// Light beams along the screen, left to right, from the top and bottom edges (whichever is lit more).
+    static func beams(_ screen: ScreenColors.Colors) -> [SIMD4<Float>]? {
+        let n = screen.top.count
+        guard n > 0, screen.beam.count >= 2 * n, screen.bottom.count == n else { return nil }
+        var out = [SIMD4<Float>](repeating: .zero, count: n)
+        var any = false
+        for i in 0..<n {
+            let top = screen.beam[i], bottom = screen.beam[n + i]
+            let color = top >= bottom ? screen.top[i] : screen.bottom[i]
+            let w = max(top, bottom)
+            if w > 0.01 { any = true }
+            out[i] = SIMD4(Float(color.r), Float(color.g), Float(color.b), w)
+        }
+        return any ? out : nil
     }
 }
 

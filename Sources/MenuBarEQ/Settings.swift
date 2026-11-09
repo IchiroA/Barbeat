@@ -92,7 +92,13 @@ final class Settings: ObservableObject {
     @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: Key.enabled) } }
     @Published var style: EQStyle { didSet { defaults.set(style.rawValue, forKey: Key.style) } }
     @Published var layout: EQLayout { didSet { defaults.set(layout.rawValue, forKey: Key.layout) } }
+    /// The colors when Screen colors is off (never `.screen`; see `screenColors`).
     @Published var palette: Palette { didSet { defaults.set(palette.rawValue, forKey: Key.palette) } }
+    /// Screen colors: the menu bar, edge glow and lights take their colors from what's on screen (Ambient light or
+    /// Main colors). Its own switch, so turning it off goes back to `palette`.
+    @Published var screenColors: Bool { didSet { defaults.set(screenColors, forKey: Key.screenColors) } }
+    /// The palette being drawn: the screen's, or the chosen one.
+    var activePalette: Palette { screenColors ? .screen : palette }
     @Published var bandCount: Int { didSet { defaults.set(bandCount, forKey: Key.bandCount) } }
     @Published var opacity: Double { didSet { defaults.set(opacity, forKey: Key.opacity) } }
     /// Extra gain in dB, -12...+12.
@@ -126,6 +132,8 @@ final class Settings: ObservableObject {
     }
     /// Screen palette: bright beams and flashes sweeping across the picture spill their own color into the glow.
     @Published var screenBeams: Bool { didSet { defaults.set(screenBeams, forKey: Key.screenBeams) } }
+    /// Light beams also flash the Hue and Art-Net lights next to them.
+    @Published var screenBeamsToLights: Bool { didSet { defaults.set(screenBeamsToLights, forKey: Key.screenBeamsToLights) } }
     /// How strongly light beams take over (see `screenBeamStrengthRange`; 1 is the default).
     @Published var screenBeamStrength: Double {
         didSet { defaults.set(screenBeamStrength, forKey: Key.screenBeamStrength) }
@@ -171,6 +179,7 @@ final class Settings: ObservableObject {
 
     private enum Key {
         static let enabled = "enabled", style = "style", layout = "layout", palette = "palette", bandCount = "bandCount"
+        static let screenColors = "screenColors"
         static let opacity = "opacity", sensitivity = "sensitivity", autoLevel = "autoLevel"
         static let showPeaks = "showPeaks", allDisplays = "allDisplays", edgeGlow = "edgeGlow"
         static let edgeGlowDepth = "edgeGlowDepth", edgeGlowTop = "edgeGlowTop"
@@ -180,6 +189,7 @@ final class Settings: ObservableObject {
         static let screenColorMode = "screenColorMode", showInFullScreen = "showInFullScreen"
         static let fullScreenStrip = "fullScreenStrip", readableMenuBar = "readableMenuBar"
         static let screenBeams = "screenBeams", screenBeamStrength = "screenBeamStrength"
+        static let screenBeamsToLights = "screenBeamsToLights"
         static let audioSource = "audioSource", sourceAppID = "sourceAppID", sourceAppName = "sourceAppName"
         static let sourceDeviceUID = "sourceDeviceUID", sourceDeviceName = "sourceDeviceName"
     }
@@ -202,7 +212,9 @@ final class Settings: ObservableObject {
             // with a deep edge glow on all sides; in full screen just the glow.
             Key.style: EQStyle.center.rawValue,
             Key.layout: EQLayout.stereo.rawValue,
-            Key.palette: Palette.screen.rawValue,
+            // New users start with Neon and Screen colors off: the welcome window offers Screen colors and explains
+            // the Screen Recording permission before macOS asks.
+            Key.palette: Palette.neon.rawValue,
             Key.bandCount: 128,
             Key.opacity: 0.74,
             Key.sensitivity: Settings.defaultSensitivity,
@@ -220,6 +232,7 @@ final class Settings: ObservableObject {
             Key.colorDrift: ColorDrift.off.rawValue,
             Key.screenColorMode: ScreenColorMode.ambient.rawValue,
             Key.screenBeams: true,
+            Key.screenBeamsToLights: true,
             Key.screenBeamStrength: 1.0,
             Key.showInFullScreen: true,
             Key.fullScreenStrip: false,
@@ -233,7 +246,26 @@ final class Settings: ObservableObject {
         enabled = defaults.bool(forKey: Key.enabled)
         style = EQStyle(rawValue: defaults.string(forKey: Key.style) ?? "") ?? .center
         layout = EQLayout(rawValue: defaults.string(forKey: Key.layout) ?? "") ?? .stereo
-        palette = Palette(rawValue: defaults.string(forKey: Key.palette) ?? "") ?? .screen
+        // Before Screen colors had its own switch it was a palette. Anyone who had it (chosen, or the old first-launch
+        // default) keeps it on, with their Custom colors (or Neon) for when it's off.
+        let savedPalette = Palette(rawValue: defaults.string(forKey: Key.palette) ?? "") ?? .neon
+        // (Read what's really saved: `defaults.string` would return the registered default.)
+        let stored = defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]
+        let storedPalette = stored[Key.palette] as? String
+        if defaults.object(forKey: Key.screenColors) != nil {
+            screenColors = defaults.bool(forKey: Key.screenColors)
+        } else {
+            let wasScreen = storedPalette == Palette.screen.rawValue || (!stored.isEmpty && storedPalette == nil)
+            screenColors = wasScreen
+            defaults.set(wasScreen, forKey: Key.screenColors)
+        }
+        if savedPalette == .screen {
+            let replacement: Palette = defaults.string(forKey: Key.customGradient) != nil ? .custom : .neon
+            palette = replacement
+            defaults.set(replacement.rawValue, forKey: Key.palette)
+        } else {
+            palette = savedPalette
+        }
         let savedBands = defaults.integer(forKey: Key.bandCount)
         bandCount = Settings.bandChoices.contains(savedBands) ? savedBands : 128
         opacity = defaults.double(forKey: Key.opacity)
@@ -255,6 +287,7 @@ final class Settings: ObservableObject {
         colorDrift = ColorDrift(rawValue: defaults.string(forKey: Key.colorDrift) ?? "") ?? .off
         screenColorMode = ScreenColorMode(rawValue: defaults.string(forKey: Key.screenColorMode) ?? "") ?? .ambient
         screenBeams = defaults.bool(forKey: Key.screenBeams)
+        screenBeamsToLights = defaults.bool(forKey: Key.screenBeamsToLights)
         let beamRange = Settings.screenBeamStrengthRange
         screenBeamStrength = min(max(defaults.double(forKey: Key.screenBeamStrength), beamRange.lowerBound),
                                  beamRange.upperBound)

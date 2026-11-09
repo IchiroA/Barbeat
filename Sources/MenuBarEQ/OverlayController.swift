@@ -13,6 +13,10 @@ final class OverlayController: NSObject {
     private let sparks = SparkSystem()
     private let demo: DemoSignal?
     private let lights = LightHub.shared
+    private let voice = VoiceDetector()
+    private let voiceEffect = VoiceEffect()
+    private let voiceSettings = VoiceSettings.shared
+    private var voiceWasOn = false
 
     private var windows: [OverlayWindow] = []
     private var edgeWindows: [OverlayWindow] = []
@@ -51,6 +55,7 @@ final class OverlayController: NSObject {
         self.status = status
         self.demo = demo ? DemoSignal() : nil
         super.init()
+        voice.demo = CommandLine.arguments.contains("--voice-demo")
     }
 
     func start() {
@@ -88,7 +93,7 @@ final class OverlayController: NSObject {
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
         settings.$fullScreenStrip.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
-        settings.$palette.combineLatest(settings.$audioSource, settings.$sourceAppID)
+        settings.$screenColors.combineLatest(settings.$audioSource, settings.$sourceAppID)
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateScreenWatching() }.store(in: &cancellables)
@@ -102,6 +107,8 @@ final class OverlayController: NSObject {
             }.store(in: &cancellables)
         // Any setting change: repaint once, even if the bars are currently at rest.
         settings.objectWillChange.receive(on: RunLoop.main)
+            .sink { [weak self] in self?.redraw() }.store(in: &cancellables)
+        voiceSettings.objectWillChange.receive(on: RunLoop.main)
             .sink { [weak self] in self?.redraw() }.store(in: &cancellables)
 
         power.onChange = { [weak self] in self?.applyFrameRate() }
@@ -301,6 +308,14 @@ final class OverlayController: NSObject {
             window.eqView.sparks = sparks
             window.eqView.notch = OverlayWindow.notchSpan(on: screen)
             window.orderFrontRegardless()
+            if verbose {
+                // Where the strip really landed, to check that its middle is the screen's middle.
+                let f = window.frame, s = screen.frame
+                print(String(format: "layout: strip on display %d: screen x %.1f…%.1f, window x %.1f…%.1f, middle %.1f of %.1f, notch %@, scale %.1f",
+                             screen.displayID, s.minX, s.maxX, f.minX, f.maxX, f.midX - s.minX, s.width,
+                             window.eqView.notch.map { String(format: "%.1f…%.1f", $0.lowerBound, $0.upperBound) } ?? "none",
+                             window.backingScaleFactor))
+            }
         }
 
         // Screen-edge glow: windows along the left, right and bottom of each screen (and the top, just below the
@@ -353,7 +368,7 @@ final class OverlayController: NSObject {
     /// Screen palette: watch the screens Barbeat draws on, or the window of the app it listens to.
     /// With only the lights on, the main screen.
     private func updateScreenWatching() {
-        let on = settings.palette == .screen && (settings.enabled || lights.isActive)
+        let on = settings.screenColors && (settings.enabled || lights.isActive)
         var displays = on ? Set((windows + edgeWindows).compactMap { $0.screen?.displayID }) : []
         if on, lights.isActive, displays.isEmpty, let main = NSScreen.screens.first?.displayID { displays.insert(main) }
         let app = settings.audioSource == .app && !settings.sourceAppID.isEmpty ? settings.sourceAppID : nil
@@ -476,18 +491,46 @@ final class OverlayController: NSObject {
             }
         }
         updateStatus(dt: dt, fresh: fresh)
-        if settings.palette == .screen { ScreenColors.shared.advance(dt: dt) }
+        if settings.screenColors { ScreenColors.shared.advance(dt: dt) }
+        updateVoice(ring: fresh ? ring : nil, sampleRate: sampleRate, dt: dt)
+        MenuBarIcon.shared.update(levels: analyzer.mid.levels, playing: fresh && analyzer.rms > 0.0005, now: lastStep)
         lights.tick(analyzer: analyzer, sound: fresh ? analyzer.rms : 0, dt: dt,
                     colors: FrameColors.current(settings: settings, display: NSScreen.screens.first?.displayID,
                                                 time: CACurrentMediaTime()),
-                    stereoLayout: stereoStrip)
+                    stereoLayout: stereoStrip, voice: VoiceFrame.current, voiceOn: voiceSettings.enabled || voice.demo)
 
         // Skip redraws while nothing is moving, to save energy. Light beams light up even when the music is quiet.
-        let beams = settings.palette == .screen && ScreenColors.shared.beamsShowing
+        let beams = settings.screenColors && ScreenColors.shared.beamsShowing
+        let voiceShowing = VoiceFrame.current.tint > 0.002 || VoiceFrame.current.glow > 0.002
         let atRest = analyzer.isAtRest && sparks.isEmpty && (style != .waterfall || history?.isEmpty ?? true) && !beams
+            && !voiceShowing
         if atRest && wasAtRest { return }
         wasAtRest = atRest
         redraw()
+    }
+
+    /// Voice: listens for singing (or speech) while the Voice switch is on, and works out this frame's effect.
+    private func updateVoice(ring: SampleRingBuffer?, sampleRate: Double, dt: Double) {
+        let on = voiceSettings.enabled || voice.demo
+        defer { voiceWasOn = on }
+        guard on else {
+            if voiceWasOn {
+                voice.stop()
+                VoiceFrame.current = VoiceFrame()
+                VoiceMonitor.shared.clear()
+            }
+            return
+        }
+        voice.target = voiceSettings.target
+        voice.update(ring: ring, sampleRate: sampleRate, dt: Float(dt))
+        VoiceFrame.current = voiceEffect.frame(from: voice, settings: voiceSettings, dt: Float(dt))
+        VoiceMonitor.shared.update(voice, frame: VoiceFrame.current, now: CACurrentMediaTime())
+        if verbose, Int(lastStep * 2) != Int((lastStep - dt) * 2) {
+            let heard = voice.heard
+            print(String(format: "voice: level %.2f raw %.2f singing %.2f speech %.2f pitch %@ tint %.2f glow %.2f",
+                         voice.level, voice.raw, heard.singing, heard.speech,
+                         voice.pitch.map { String(format: "%.1f", $0) } ?? "-", VoiceFrame.current.tint, VoiceFrame.current.glow))
+        }
     }
 
     private func redraw() {
