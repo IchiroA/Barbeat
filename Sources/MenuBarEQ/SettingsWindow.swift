@@ -37,7 +37,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var intro: String {
         switch self {
         case .screen: return ""
-        case .scenes: return "Save whole looks and switch with one click, or let Barbeat switch on its own when an app plays or you're on a call."
+        case .scenes: return "A scene saves almost every setting. Switch with one click, let Barbeat switch on its own when an app plays or you're on a call, and share scenes as files."
         case .look: return "How the visuals look: the style, the colors and how many bars."
         case .sound: return "What Barbeat listens to, and how strongly it reacts."
         case .glow: return "How bright the visuals are, the glow around the edges of the screen, and where they show."
@@ -135,10 +135,14 @@ struct SettingsWindowView: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Text("Barbeat \(Credits.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(8)
+            VStack(alignment: .leading, spacing: 4) {
+                Link("♥ Support Barbeat", destination: Credits.supportURL)
+                    .help("Ways to support Barbeat")
+                Text("Barbeat \(Credits.version)")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .padding(8)
         }
         .padding(10)
         .frame(width: 190)

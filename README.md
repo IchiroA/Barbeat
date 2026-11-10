@@ -8,7 +8,8 @@ driven by whatever your Mac is playing.
 - **Screen colors**: the menu bar, the glow around the screen and your lights take their colors from what you're
   watching, like a TV's backlight. Stage beams and lasers spill out of the screen, into your room too.
 - **Ten styles**, a screen edge glow, palettes or your own colors, and narrower bars on ultrawide screens.
-- **Scenes**: whole looks in one click, switching on their own when an app plays or you're on a call.
+- **Scenes**: almost every setting in one click, switching on their own when an app plays or you're on a call, and
+  exported as JSON files to back up or share with friends.
 - **Voice**: colors and a glow that follow the singer.
 - **Lights**: Philips Hue and WLED / Art-Net lights in the same colors, with mirror, sparkles and a sleep timer.
 - **`barbeat://` links** for Shortcuts, Stream Deck and Raycast, and updates that install themselves (with your OK).
@@ -67,13 +68,21 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
   become the palette for when it's off. New users start with it off: a **welcome window** (once, `welcome.shown`;
   General › Show the Welcome Window) offers it, and turning it on the first time explains what Barbeat reads before
   macOS asks for Screen Recording.
-- **Scenes** (v1.11, `Scenes.swift`): a scene is a `SceneLook` (visuals, palette, Screen colors and beams,
-  brightness, opacity, edge glow, lights, voice; nil fields are left alone) plus triggers: while one of these apps
-  plays (Core Audio process output, helpers counted as their app) or while you're on a call (any real input device
-  running somewhere, from `kAudioDevicePropertyDeviceIsRunningSomewhere`; Barbeat's own tap, aggregate and virtual
-  devices don't count). Checked every 2 s; switches after 3 s, goes back 8 s after the trigger ends, restoring a
-  snapshot of the look from before. Picking a scene by hand wins until the trigger ends. Starters: On a call,
-  Concert, Chill, Focus. Saved as `scenes` (JSON). The panel's Scene row says why it switched.
+- **Scenes** (`Scenes.swift`, page and files in `ScenesUI.swift`): a scene is a `SceneLook` with almost every
+  setting, in eight parts (`ScenePart`): Style, Colors, Screen colors, Brightness and glow, Listen to, Sensitivity,
+  Lights (including each device's switch and effects, by output ID) and Voice. Nil fields are left alone, and a
+  scene's `skipped` parts aren't applied (their values are kept for ticking them again). Values are clamped to the
+  settings' ranges (`cleaned()`) on import and when applied; light devices that aren't set up here are ignored.
+  Triggers: while one of these apps plays (Core Audio process output, helpers counted as their app) or while you're
+  on a call (any real input device running somewhere, from `kAudioDevicePropertyDeviceIsRunningSomewhere`; Barbeat's
+  own tap, aggregate and virtual devices don't count). Checked every 2 s; switches after 3 s, goes back 8 s after the
+  trigger ends, restoring a snapshot of the look from before (saved as `scenes.restore`, so a quit mid-call is put
+  back at the next launch). Picking a scene by hand wins until the trigger ends. Starters: Chameleon (added once to
+  existing scene lists, `scenes.chameleonAdded`), On a call, Concert, Chill, Focus. Saved as `scenes` (JSON); the
+  scene in use as `scenes.active`. The panel's Scenes button opens Settings › Scenes and says why it switched or
+  that you've changed things since. Export/Import (and dropping files on the page) read and write
+  `{"barbeat": "scenes", "version": 1, "scenes": [...]}`, a bare list, or a single scene; a scene that's already here
+  (same ID) is replaced or kept next to it.
 - **Light beams to the lights**: with Screen colors and Follow light beams on, `screenBeamsToLights` (default on)
   lets beam strength along the top and bottom edges light the Hue/Art-Net light at the same left-right spot, in the
   beam's color, before the 3-flashes-a-second cap.
@@ -203,10 +212,12 @@ The icon is drawn by `scripts/make-icon.swift` (`swift scripts/make-icon.swift` 
 | `--voice-snapshot out.png` | Renders the Voice window offscreen and saves it, then quits |
 | `--update-test` | Checks for an update now, downloads and verifies it, prints what happened and quits (never installs or shows a dialog) |
 | `--update-feed URL` | Reads that JSON instead of GitHub's latest release (to test the updater) |
-| `--settings-snapshot out.png [page]` | Renders the Settings window offscreen at that page (screen, look, sound, glow, lights, voice, general), then quits |
+| `--settings-snapshot out.png [page]` | Renders the Settings window offscreen at that page (screen, scenes, look, sound, glow, lights, voice, general), then quits; `--scenes-expand` opens the first scene's details |
 | `--welcome-snapshot out.png` | Renders the welcome window offscreen, then quits |
 | `--open-url barbeat://…` | Runs a `barbeat://` link at launch, as if it were opened |
 | `--pretend-trigger call:3:12` | Acts as if a call (or `<bundle id>` playing) ran from 3 s to 12 s after launch, to test scene switching |
+| `--scenes-import file.json` | Adds a scene file's scenes at launch (keeps both on duplicates, no dialogs) |
+| `--scenes-export file.json` | Saves all scenes to a scene file at launch |
 | `--sleep-in N` | Starts the lights' sleep timer for N seconds |
 | `--icon-snapshot out.png` | Renders three menu bar icon samples, then quits |
 | `--bar-columns N` | Draws N bar columns per band, as on a screen N times wider than 16:9 (to test in-between bars on any screen) |

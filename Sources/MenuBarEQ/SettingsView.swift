@@ -105,11 +105,20 @@ struct SettingsView: View {
                     .keyboardShortcut(",", modifiers: .command)
                     .help("Every setting: Screen colors, look, sound, glow, lights, voice and more")
                 Spacer()
-                Link("Help", destination: Credits.helpURL)
-                    .font(.caption)
-                    .help("Opens Barbeat's guide in your browser")
+                HStack(spacing: 10) {
+                    Link("Help", destination: Credits.helpURL)
+                        .help("Opens Barbeat's guide in your browser")
+                    Link("♥ Support", destination: Credits.supportURL)
+                        .help("Ways to support Barbeat")
+                }
+                .font(.caption)
                 Button("Quit") { NSApp.terminate(nil) }
             }
+
+            Text("Made by \(Credits.author) · \(Credits.handle) · v\(Credits.version)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(16)
         .frame(width: 320)

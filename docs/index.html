@@ -145,7 +145,7 @@
       <h2>The panel and Settings</h2>
       <p class="lead">Click the four-bar icon in the menu bar for quick controls: the on/off switch, Screen colors, scenes, style, colors, brightness, Lights and Voice. <strong>Settings…</strong> opens a window with everything else, one page per topic.</p>
       <div class="settings">
-        <div class="panel"><img src="images/panel.png" alt="The Barbeat panel: the on/off switch, the Screen colors card with the colors it sees, a Scene menu, ten styles, Brightness, Lights and Voice, and Settings and Quit buttons" width="640" height="1202" loading="lazy"></div>
+        <div class="panel"><img src="images/panel.png" alt="The Barbeat panel: the on/off switch, the Screen colors card with the colors it sees, a Scenes button showing Chameleon, ten styles, Brightness, Lights and Voice, Settings, Help, Support and Quit, and who made it" width="640" height="1280" loading="lazy"></div>
         <div>
           <p class="group-title">Screen colors</p>
           <dl>
@@ -197,23 +197,33 @@
     <div class="wrap">
       <span class="eyebrow gradient-text">Scenes</span>
       <h2>One click for a whole look</h2>
-      <p class="lead">A scene saves everything at once: the style, colors, Screen colors, glow, lights and voice. Pick one from the <strong>Scene</strong> menu in the panel, or let Barbeat switch on its own.</p>
-      <div class="cards" style="margin-top: 28px;">
+      <p class="lead">A scene saves almost every setting at once: the style, colors, Screen colors, brightness and glow, what Barbeat listens to, sensitivity, lights and voice. Click <strong>Scenes</strong> in the panel to pick one, or let Barbeat switch on its own.</p>
+      <div class="cards two" style="margin-top: 28px;">
         <div class="card">
           <span class="tag">Starter scenes</span>
-          <h4>Concert, Chill, Focus and On a call</h4>
-          <p class="muted">Concert is Center bars in Screen colors with light beams and bright lights. Chill is a slow, soft glow. Focus is thin, quiet bars with the lights off. On a call goes dark until the call ends. Change them, delete them, or save your own with <strong>Save Current Look</strong>.</p>
+          <h4>Chameleon, Concert, Chill, Focus and On a call</h4>
+          <p class="muted">Chameleon takes on the colors of whatever you're watching: Center bars in Screen colors (Ambient light) that follow light beams and flash your lights, a deep glow on every edge, and the voice in pitch colors. Concert is a brighter Screen colors show. Chill is a slow, soft glow. Focus is thin, quiet bars with the lights off. On a call goes dark until the call ends. Change them, delete them, or save your own with <strong>Save Current Look</strong>.</p>
         </div>
         <div class="card">
           <span class="tag">Automatic</span>
           <h4>Switches when an app plays, or you're on a call</h4>
-          <p class="muted">Give a scene a trigger: <strong>while one of these apps plays</strong> (Concert while Safari plays a show, Chill for Apple Music) or <strong>while you're on a call</strong> (any app using a microphone). When the trigger ends, everything goes back to how it was. Pick another scene meanwhile and yours wins until the trigger ends.</p>
+          <p class="muted">Give a scene a trigger: <strong>while one of these apps plays</strong> (Concert while Safari plays a show, Chill for Apple Music) or <strong>while you're on a call</strong> (any app using a microphone). When the trigger ends, everything goes back to how it was, even if Barbeat quit in between. Pick another scene meanwhile and yours wins until the trigger ends.</p>
+        </div>
+        <div class="card">
+          <span class="tag">What it sets</span>
+          <h4>Leave out what a scene shouldn't touch</h4>
+          <p class="muted">Click <strong>Sets 7 of 8 parts</strong> under a scene to choose its parts: Style, Colors, Screen colors, Brightness and glow, Listen to, Sensitivity, Lights and Voice. Unticked parts stay as they are when you use the scene, so a scene can just change the lights, or leave what Barbeat listens to alone.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Backup and sharing</span>
+          <h4>Export and import scene files</h4>
+          <p class="muted"><strong>Export All…</strong> saves every scene in one file, and a scene's ⋯ menu exports just that one. <strong>Import…</strong>, or dropping a file on the Scenes page, adds them back, on your Mac or a friend's. Scene files are plain JSON. Light devices are matched by ID, so a friend's scene leaves your own lights' switches and sparkles alone.</p>
         </div>
       </div>
       <figure class="shot" style="margin-top: 28px;">
-        <img src="images/settings-scenes.jpg" alt="Settings › Scenes: Switch scenes automatically, and cards for On a call, Concert, Chill and Focus, each with a Use button, a summary and its triggers" width="1640" height="1672" loading="lazy">
+        <img src="images/settings-scenes.jpg" alt="Settings › Scenes: Save Current Look, Import and Export All buttons; Chameleon in use with its parts ticked (all but Listen to) and its triggers; cards for On a call, Concert, Chill and Focus, each with a Use button and a summary; Switch scenes automatically; and a note on backing up and sharing" width="1640" height="2038" loading="lazy">
       </figure>
-      <p class="note">Barbeat waits a few seconds before switching, so a notification sound doesn't change the scene, and a little longer before switching back, so it doesn't flip between songs.</p>
+      <p class="note">Barbeat waits a few seconds before switching, so a notification sound doesn't change the scene, and a little longer before switching back, so it doesn't flip between songs. Changed something since you picked a scene? The page says so: use the scene again to go back, or choose <strong>Update with the Current Look</strong> in its ⋯ menu to keep the changes.</p>
     </div>
   </section>
 
@@ -315,7 +325,7 @@
       </details>
       <details>
         <summary>The look changed by itself</summary>
-        <div><p>A scene with a trigger switched on, for example On a call while an app used the microphone. The Scene row in the panel says why. Turn off <strong>Switch scenes automatically</strong> under Settings › Scenes, or remove the trigger from that scene.</p></div>
+        <div><p>A scene with a trigger switched on, for example On a call while an app used the microphone. The Scenes button in the panel says why. Turn off <strong>Switch scenes automatically</strong> under Settings › Scenes, or remove the trigger from that scene.</p></div>
       </details>
       <details>
         <summary>The bars don't move</summary>

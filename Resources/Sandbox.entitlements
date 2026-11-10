@@ -10,6 +10,9 @@
     <true/>
     <key>com.apple.security.network.server</key>
     <true/>
+    <!-- Scenes: importing and exporting scene files through the open and save panels. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
     <!-- Needed for the system-audio tap. -->
     <key>com.apple.security.device.audio-input</key>
     <true/>

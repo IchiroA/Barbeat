@@ -55,6 +55,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let i = args.firstIndex(of: "--sleep-in"), i + 1 < args.count, let seconds = Double(args[i + 1]) {
             LightHub.shared.startSleep(minutes: seconds / 60)
         }
+        // `--scenes-import <file>` adds a scene file's scenes (keeping both on duplicates, no questions);
+        // `--scenes-export <file>` saves all scenes. To test scene files without the open and save panels.
+        if let i = args.firstIndex(of: "--scenes-import"), i + 1 < args.count {
+            SceneFiles.importFiles([URL(fileURLWithPath: args[i + 1])], ask: false)
+            print("scenes-import: \(SceneStore.shared.message?.text ?? "nothing")")
+        }
+        if let i = args.firstIndex(of: "--scenes-export"), i + 1 < args.count {
+            do {
+                try SceneFiles.data(for: SceneStore.shared.scenes).write(to: URL(fileURLWithPath: args[i + 1]))
+                print("scenes-export: wrote \(SceneStore.shared.scenes.count) scenes to \(args[i + 1])")
+            } catch {
+                print("scenes-export: \(error.localizedDescription)")
+            }
+        }
         // Scenes switch on their own when an app plays or a call starts.
         if !testRun || args.contains("--scenes-auto") { SceneStore.shared.start() }
         // Once: what Barbeat does, Screen colors first, and where the settings went.
