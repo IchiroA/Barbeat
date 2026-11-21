@@ -2,7 +2,7 @@
 // and prints bar, VU meter and pulse statistics.
 //
 //   swiftc -O -o .build/tune Sources/MenuBarEQ/SpectrumAnalyzer.swift Sources/MenuBarEQ/SampleRingBuffer.swift \
-//       Sources/MenuBarEQ/Lights/LightShow.swift scripts/tune-analyzer/main.swift
+//       Sources/MenuBarEQ/Lights/LightShow.swift Sources/MenuBarEQ/BeatPulseEngine.swift Sources/MenuBarEQ/BeatTracker.swift scripts/tune-analyzer/main.swift
 //   .build/tune "path/to/song.mp3" [bands=64] [mono|stereo] [sensitivity dB]
 
 import AVFoundation
@@ -61,6 +61,11 @@ var sparkleWhite = [Bool](repeating: false, count: 9)
 var sparkleCount = 0
 var sparkleLine = ""
 var pulseMeter = FlashMeter()
+// The full-screen beat pulse, normal and with Reduce motion.
+let beatPulse = BeatPulse(), calmPulse = BeatPulse()
+let beatClock = BeatTracker()
+var beatMeter = FlashMeter(), calmMeter = FlashMeter()
+var beatLine = ""
 var bandMeters = [FlashMeter](repeating: FlashMeter(), count: 3)
 var bandLines = ["", "", ""]
 var flashTotal = [0, 0, 0]
@@ -101,6 +106,13 @@ while pos + step < frames {
         if bandMeters[i].events.count > before { flashTotal[i] += 1 }
     }
 
+    beatClock.update(levels: analyzer.mid.levels, playing: true, dt: 1 / 60)
+    let beatValue = beatPulse.frame(kick: analyzer.mid.kick, intensity: analyzer.mid.pulse, playing: true, reduceMotion: false, dt: 1 / 60,
+                                    tempo: beatClock)
+    beatMeter.add(beatValue, at: time)
+    calmMeter.add(calmPulse.frame(kick: analyzer.mid.kick, intensity: analyzer.mid.pulse, playing: true, reduceMotion: true, dt: 1 / 60,
+                                  tempo: beatClock), at: time)
+
     let nine = sparkleShow.frame(slots: LightSlot.row(9), signals: signals, palette: palette, options: sparkleOptions, dt: 1 / 60)
     var whites = 0
     for i in 0..<9 {
@@ -117,6 +129,7 @@ while pos + step < frames {
         meterLine.append(sparkChar(analyzer.meterLeft))
         for i in 0..<3 { bandLines[i].append(sparkChar(three[i].brightness)) }
         sparkleLine.append(sparkChar(Float(whites) / 9))
+        beatLine.append(sparkChar(beatValue))
     }
 }
 
@@ -138,3 +151,6 @@ for (i, name) in ["low ", "mid ", "high"].enumerated() { print("bands  \(name) 2
 let sparkleWorst = sparkleMeters.map(\.worst).max() ?? 0
 print("light  sparkles (9 lights, max 9, 0.1 s)  flashes/s max \(sparkleWorst) per light  sparkles/min \(Int(Double(sparkleCount) / minutes))")
 print("sparkles 20-24s \(sparkleLine)  (share of lights white)")
+print("screen beat pulse  \(beatMeter.summary)  beats/min \(Int(Double(beatPulse.beats) / minutes))  tempo \(Int(beatClock.bpm.rounded())) BPM")
+print("screen beat pulse, Reduce motion  \(calmMeter.summary)")
+print("beat pulse 20-24s \(beatLine)")

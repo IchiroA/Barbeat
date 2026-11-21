@@ -17,6 +17,13 @@ final class OverlayController: NSObject {
     private let voiceEffect = VoiceEffect()
     private let voiceSettings = VoiceSettings.shared
     private var voiceWasOn = false
+    /// The beat pulse (its own switch and windows).
+    private let pulse: PulseController
+    private let pulseSettings = PulseSettings.shared
+    /// The kaleidoscope show mode.
+    private let kaleidoscope = KaleidoscopeController.shared
+    /// The music's tempo and a beat clock locked to it, for the beat pulse and the kaleidoscope.
+    private let beatClock = BeatTracker()
 
     private var windows: [OverlayWindow] = []
     private var edgeWindows: [OverlayWindow] = []
@@ -54,6 +61,7 @@ final class OverlayController: NSObject {
         self.settings = settings
         self.status = status
         self.demo = demo ? DemoSignal() : nil
+        pulse = PulseController(app: settings)
         super.init()
         voice.demo = CommandLine.arguments.contains("--voice-demo")
     }
@@ -81,6 +89,7 @@ final class OverlayController: NSObject {
         settings.$enabled.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.applyRunning() }.store(in: &cancellables)
         lights.onActiveChange = { [weak self] in self?.applyRunning() }
+        kaleidoscope.onRunningChange = { [weak self] in self?.applyRunning() }
         settings.$allDisplays.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
         settings.$edgeGlow.dropFirst().receive(on: RunLoop.main)
@@ -110,6 +119,12 @@ final class OverlayController: NSObject {
             .sink { [weak self] in self?.redraw() }.store(in: &cancellables)
         voiceSettings.objectWillChange.receive(on: RunLoop.main)
             .sink { [weak self] in self?.redraw() }.store(in: &cancellables)
+        // The beat pulse runs on its own switch; its look and the screen choices change its windows.
+        pulseSettings.$enabled.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.applyRunning() }.store(in: &cancellables)
+        pulseSettings.$look.combineLatest(settings.$allDisplays, settings.$showInFullScreen).dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.pulse.apply() }.store(in: &cancellables)
 
         power.onChange = { [weak self] in self?.applyFrameRate() }
         power.start()
@@ -134,7 +149,9 @@ final class OverlayController: NSObject {
     }
 
     /// Barbeat listens while the menu bar visuals or the lights are on (or the Lights window shows a preview).
-    private var isListening: Bool { settings.enabled || lights.isActive || lights.previewWanted }
+    private var isListening: Bool {
+        settings.enabled || lights.isActive || lights.previewWanted || pulseSettings.enabled || kaleidoscope.running
+    }
 
     /// The menu bar visuals and the lights have their own switches; audio and the render loop run for either.
     private func applyRunning() {
@@ -161,6 +178,7 @@ final class OverlayController: NSObject {
             edgeWindows.removeAll()
             updateScreenWatching()
         }
+        pulse.apply()
     }
 
     static let restartAudioNotification = Notification.Name("MenuBarEQ.restartAudio")
@@ -242,6 +260,7 @@ final class OverlayController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.isListening else { return }
             self.rebuildWindows()
+            self.pulse.apply()
             self.stopDisplayLink()
             self.startDisplayLink()
         }
@@ -392,6 +411,7 @@ final class OverlayController: NSObject {
             ? CAFrameRateRange(minimum: 24, maximum: 30, preferred: 30)
             : CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         if verbose { print("frame rate: \(power.onBattery ? "30 fps (on battery)" : "60 fps")") }
+        kaleidoscope.onBattery = power.onBattery
         updateScreenCapture()
     }
 
@@ -473,7 +493,8 @@ final class OverlayController: NSObject {
                 sensitivityDb: Float(settings.sensitivity),
                 autoLevel: settings.autoLevel,
                 // VU only needs the raw left/right levels; the lights use both mid and left/right.
-                mono: (!stereoStrip && style != .vu) || lights.isActive || lights.previewWanted,
+                mono: (!stereoStrip && style != .vu) || lights.isActive || lights.previewWanted || pulseSettings.enabled
+                    || kaleidoscope.running,
                 stereo: (stereoStrip && style != .vu) || settings.edgeGlow || lights.isActive || lights.previewWanted,
                 scope: style == .scope,
                 lowGainDb: Float(settings.lowGain),
@@ -494,10 +515,15 @@ final class OverlayController: NSObject {
         if settings.screenColors { ScreenColors.shared.advance(dt: dt) }
         updateVoice(ring: fresh ? ring : nil, sampleRate: sampleRate, dt: dt)
         MenuBarIcon.shared.update(levels: analyzer.mid.levels, playing: fresh && analyzer.rms > 0.0005, now: lastStep)
-        lights.tick(analyzer: analyzer, sound: fresh ? analyzer.rms : 0, dt: dt,
-                    colors: FrameColors.current(settings: settings, display: NSScreen.screens.first?.displayID,
-                                                time: CACurrentMediaTime()),
+        let colors = FrameColors.current(settings: settings, display: NSScreen.screens.first?.displayID, time: CACurrentMediaTime())
+        lights.tick(analyzer: analyzer, sound: fresh ? analyzer.rms : 0, dt: dt, colors: colors,
                     stereoLayout: stereoStrip, voice: VoiceFrame.current, voiceOn: voiceSettings.enabled || voice.demo)
+        if pulseSettings.enabled || kaleidoscope.running {
+            beatClock.update(levels: analyzer.mid.levels, playing: fresh && analyzer.rms > 0.0005, dt: dt)
+            TempoMonitor.shared.update(beatClock, now: lastStep)
+        }
+        pulse.tick(analyzer: analyzer, sound: fresh ? analyzer.rms : 0, colors: colors, tempo: beatClock, dt: dt)
+        kaleidoscope.tick(analyzer: analyzer, sound: fresh ? analyzer.rms : 0, colors: colors, tempo: beatClock, dt: dt)
 
         // Skip redraws while nothing is moving, to save energy. Light beams light up even when the music is quiet.
         let beams = settings.screenColors && ScreenColors.shared.beamsShowing

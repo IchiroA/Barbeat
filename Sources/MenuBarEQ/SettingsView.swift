@@ -97,6 +97,8 @@ struct SettingsView: View {
 
             LightsRow(settings: .shared, hub: .shared)
             VoiceRow(settings: .shared)
+            PulseRow(settings: .shared)
+            KaleidoscopeRow(controller: .shared, settings: .shared)
 
             Divider()
 

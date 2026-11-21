@@ -4,7 +4,7 @@ import ServiceManagement
 
 /// The pages of the Settings window, in sidebar order.
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case screen, scenes, look, sound, glow, lights, voice, general
+    case screen, scenes, look, sound, glow, lights, voice, pulse, kaleidoscope, general
     var id: String { rawValue }
 
     var title: String {
@@ -16,6 +16,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .glow: return "Glow and screens"
         case .lights: return "Lights"
         case .voice: return "Voice"
+        case .pulse: return "Beat pulse"
+        case .kaleidoscope: return "Kaleidoscope"
         case .general: return "General"
         }
     }
@@ -29,6 +31,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .glow: return "rectangle.dashed"
         case .lights: return "lightbulb.2"
         case .voice: return "music.mic"
+        case .pulse: return "rays"
+        case .kaleidoscope: return "circle.hexagongrid"
         case .general: return "gearshape"
         }
     }
@@ -43,6 +47,8 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .glow: return "How bright the visuals are, the glow around the edges of the screen, and where they show."
         case .lights: return ""
         case .voice: return ""
+        case .pulse: return "The whole screen pulses with the beat: a glow from the edges, a wash of color, or the brightness itself. It has its own switch and doesn't change anything else."
+        case .kaleidoscope: return "A show mode: your screen becomes a kaleidoscope that turns with the music and zooms on the beat."
         case .general: return "Starting up, updates, and help."
         }
     }
@@ -173,6 +179,8 @@ struct SettingsWindowView: View {
                 case .look: LookPage(settings: settings)
                 case .sound: SoundPage(settings: settings)
                 case .glow: GlowPage(settings: settings)
+                case .pulse: PulsePage(settings: .shared)
+                case .kaleidoscope: KaleidoscopePage(settings: .shared, controller: .shared)
                 default: GeneralPage(updater: .shared)
                 }
             }

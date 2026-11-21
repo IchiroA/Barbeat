@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        PulseController.restoreDisplays()
         let hub = LightHub.shared
         hub.closing = true
         guard hub.isHoldingLights else { return .terminateNow }
@@ -81,7 +82,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if i + 2 < args.count, let page = SettingsPage(rawValue: args[i + 2]) { SettingsRouter.shared.page = page }
             LightHub.shared.previewWanted = SettingsRouter.shared.page == .lights
             VoiceMonitor.shared.wanted = SettingsRouter.shared.page == .voice
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            // `--snapshot-delay N`: wait N seconds instead of 2.5 (say, for the beat clock to lock on in demo mode).
+            let delay = args.firstIndex(of: "--snapshot-delay").flatMap { $0 + 1 < args.count ? Double(args[$0 + 1]) : nil } ?? 2.5
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 PanelSnapshot.save(SettingsWindowView(router: .shared, settings: .shared, scrolls: false), width: 820, to: path)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NSApp.terminate(nil) }
             }
@@ -116,6 +119,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                 PanelSnapshot.save(LightsView(settings: .shared, hub: .shared, app: .shared, scrolls: false), width: 500, to: path)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { NSApp.terminate(nil) }
+            }
+        }
+        // `--pulse-snapshot out.png` draws the beat pulse's two glow looks over a grey screen, then quits.
+        if let i = args.firstIndex(of: "--pulse-snapshot"), i + 1 < args.count {
+            PulseArt.writeSnapshot(to: args[i + 1])
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+        // `--kaleidoscope-image picture.png out.png [mirrors] [mirror|crystal|tunnel]` draws the kaleidoscope of a picture
+        // offscreen, then quits.
+        if let i = args.firstIndex(of: "--kaleidoscope-image"), i + 2 < args.count {
+            let mirrors = i + 3 < args.count ? Int(args[i + 3]) ?? 8 : 8
+            let pattern = i + 4 < args.count ? KaleidoscopePattern(rawValue: args[i + 4]) ?? .crystal : .crystal
+            KaleidoscopeRenderer.writeSnapshot(from: args[i + 1], to: args[i + 2], segments: mirrors, pattern: pattern)
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+        // `--kaleidoscope-start` starts the show a second after launch (to test it; Esc or a click stops it). Only
+        // with Screen Recording already allowed: a test run never asks.
+        if args.contains("--kaleidoscope-start") {
+            if CGPreflightScreenCaptureAccess() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { KaleidoscopeController.shared.start() }
+            } else {
+                print("kaleidoscope: no Screen Recording permission for this copy, not starting")
             }
         }
         if let i = args.firstIndex(of: "--voice-snapshot"), i + 1 < args.count {

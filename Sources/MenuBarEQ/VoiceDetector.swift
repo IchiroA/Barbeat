@@ -18,24 +18,56 @@ enum VoiceTarget: String, CaseIterable, Identifiable, Codable {
 }
 
 /// Finds voices in the music, in two parts:
-/// - The sound itself, every frame: energy panned to the middle (singers almost always are), in the voice range,
-///   in held, pitched notes rather than hits. Moves with every word and costs next to nothing.
-/// - Apple's sound recognizer, twice a second: is anyone singing (or talking) right now? It gates the first part,
-///   so a guitar or synth solo in the middle doesn't count while nobody sings.
-/// Foundation, Accelerate and SoundAnalysis only, so the tuning harness can run it on songs.
+/// - Apple's sound recognizer, four times a second: is anyone singing (or talking) right now? That decides whether
+///   there's a voice at all, so a guitar or synth solo in the middle doesn't count while nobody sings.
+/// - The sound itself, every frame: how loud the part panned to the middle is in the voice range (singers almost
+///   always sit in the middle), which moves with every word, and the singer's note from the harmonics of that part.
+/// Tuned against Demucs vocal stems with scripts/tune-voice (score.py). Foundation, Accelerate and SoundAnalysis
+/// only, so the tuning harness can run it on songs.
 final class VoiceDetector {
+    /// Numbers found with scripts/tune-voice/score.py. The harness can change them (V_<name>=value) to try others.
+    struct Tuning: Equatable {
+        // Recognizer: one-second looks, a new one every quarter second.
+        var recognizerWindow: Double = 1
+        var recognizerOverlap: Double = 0.75
+        // Gate: the effect shows while `presence` is above about this (it fades in over +-0.1).
+        var gateAt: Float = 0.7
+        // Level: loudness of the centered voice range against its own recent loudest.
+        var levelRange: Float = 15     // dB below the recent loudest that reads as 0
+        var levelDecay: Float = 0.5    // dB per second the "recent loudest" sinks
+        var levelRelease: Float = 0.05 // seconds
+        // Words: a jump up of the level from where it just was.
+        var wordRise: Float = 0.15
+        var wordFloor: Float = 0.15    // seconds the "where it just was" takes to catch up
+        // Pitch: harmonic salience on a flattened spectrum.
+        var flatten: Float = 0.7       // 0 = raw magnitudes, 1 = fully flattened
+        var lowestNote: Float = 45     // 110 Hz
+        var highestNote: Float = 84    // 1047 Hz
+        var harmonics = 10
+        var harmonicWeight: Float = 0.85
+        var lowestHarmonicHz: Float = 150
+        var confident: Float = 2.4     // salience above this trusts the note
+        var noteMedian = 5             // frames
+        var octaveSnap = true          // fold only jumps of about an octave (false: fold everything into +-7 semitones)
+        var noteSmoothing: Float = 0.2 // share of the old note kept each frame
+    }
+    var tuning = Tuning()
+
     /// How loud the voice is right now, 0...1 (0 while the recognizer hears no voice).
     private(set) var level: Float = 0
     /// How hard a new word or syllable starts this frame (0 on most frames).
     private(set) var word: Float = 0
     /// The voice's pitch as a MIDI note (60 = middle C), smoothed. Nil while unsure.
     private(set) var pitch: Float?
-    /// The recognizer's confidence that the chosen kind of voice is there, smoothed, 0...1.
+    /// How sure the detector is that the chosen kind of voice is there, 0...1: the recognizer's answers over the last
+    /// two seconds and the loudness of the centered voice range, weighed by `Gate`.
     private(set) var presence: Float = 0
-    /// Voice-likeness from the sound alone, before the recognizer's gate, 0...1.
+    /// Voice loudness from the sound alone, before the recognizer's gate, 0...1.
     private(set) var raw: Float = 0
-    /// The sound-only signal's ingredients (for tuning): loudness, how centered, how strongly one pitch stands out.
-    private(set) var parts: (loud: Float, centered: Float, harmonic: Float) = (0, 0, 0)
+    /// For tuning: how strongly the best note stands out (about 1.5 to 2 without a voice, 2 to 4 with one), and
+    /// that note before smoothing.
+    private(set) var salience: Float = 0
+    private(set) var candidate: Float?
     /// The recognizer's latest confidences (for the meter and tuning).
     var heard: (singing: Float, speech: Float) { observer.latest }
 
@@ -61,6 +93,53 @@ final class VoiceDetector {
     private let powerM: UnsafeMutablePointer<Float>
     private let powerS: UnsafeMutablePointer<Float>
     private let center: UnsafeMutablePointer<Float>   // magnitude of the part panned to the middle, per bin
+    private let flat: UnsafeMutablePointer<Float>     // the same, flattened (each bin over its neighbourhood)
+    private let running: UnsafeMutablePointer<Float>  // running sum of `center`, for the neighbourhood averages
+    private let peak3: UnsafeMutablePointer<Float>    // the strongest of each flattened bin and its two neighbours
+    private var layout = Layout()
+
+    /// Where each candidate note's harmonics fall in the spectrum. Depends only on the sample rate and the tuning,
+    /// so it's worked out once instead of every frame.
+    private struct Layout {
+        static let step: Float = 0.2   // candidates a fifth of a semitone apart
+        struct Key: Equatable {
+            var binHz: Float
+            var tuning: Tuning
+        }
+        var key = Key(binHz: 0, tuning: Tuning())
+        var top = 0, notes = 0, harmonics = 0
+        var from: [Int] = [], to: [Int] = []   // each bin's neighbourhood
+        var bins: [Int] = []                   // notes x harmonics, 0 = outside the range that counts
+        var weights: [Float] = []
+        var exponents: [Float] = []
+
+        init() {}
+
+        init(binHz: Float, half: Int, tuning t: Tuning) {
+            key = Key(binHz: binHz, tuning: t)
+            top = min(half - 2, Int(5000 / binHz) + 2)
+            from = [Int](repeating: 0, count: top)
+            to = from
+            for k in 1..<top {
+                let w = max(3, Int(Float(k) * 0.06))
+                from[k] = max(0, k - w)
+                to[k] = min(top, k + w + 1)
+            }
+            harmonics = max(1, t.harmonics)
+            notes = max(1, Int((t.highestNote - t.lowestNote) / Self.step) + 1)
+            weights = (0..<harmonics).map { pow(t.harmonicWeight, Float($0)) }
+            let lowBin = max(1, Int(t.lowestHarmonicHz / binHz))
+            bins = [Int](repeating: 0, count: notes * harmonics)
+            for c in 0..<notes {
+                let f0 = 440 * pow(2, (t.lowestNote + Float(c) * Self.step - 69) / 12)
+                for h in 0..<harmonics {
+                    let i = Int(f0 * Float(h + 1) / binHz + 0.5)
+                    bins[c * harmonics + h] = i >= lowBin && i + 1 < top ? i : 0
+                }
+            }
+            exponents = [Float](repeating: t.flatten, count: top)
+        }
+    }
 
     private var reference: Float = -60
     private var envelope: Float = 0
@@ -69,6 +148,7 @@ final class VoiceDetector {
     private var wordArmed = true
     private var wordCooldown: Float = 0
     private var smoothPitch: Float?
+    private var recentNotes: [Float] = []
     private var unsure: Float = 0
     private var clock: Double = 0
 
@@ -96,13 +176,14 @@ final class VoiceDetector {
         bufL = buffer(Self.n); bufR = buffer(Self.n); bufM = buffer(Self.n); bufS = buffer(Self.n)
         realp = buffer(Self.n / 2); imagp = buffer(Self.n / 2)
         powerM = buffer(Self.n / 2); powerS = buffer(Self.n / 2); center = buffer(Self.n / 2)
+        flat = buffer(Self.n / 2); running = buffer(Self.n / 2 + 1); peak3 = buffer(Self.n / 2)
         mono = buffer(Self.monoCapacity)
         vDSP_hann_window(window, vDSP_Length(Self.n), Int32(vDSP_HANN_DENORM))
     }
 
     deinit {
         vDSP_destroy_fftsetup(setup)
-        [window, bufL, bufR, bufM, bufS, realp, imagp, powerM, powerS, center, mono].forEach { $0.deallocate() }
+        [window, bufL, bufR, bufM, bufS, realp, imagp, powerM, powerS, center, flat, running, peak3, mono].forEach { $0.deallocate() }
     }
 
     /// Call once per frame while voices are wanted. `ring: nil` when no fresh audio is arriving.
@@ -116,21 +197,62 @@ final class VoiceDetector {
         feedRecognizer(ring: ring, sampleRate: sampleRate, dt: dt)
         analyzeSound(ring: ring, sampleRate: sampleRate, dt: dt)
 
-        // The recognizer's word on whether a voice is there: quick to notice, slow to let go between lines.
+        // Is the voice there? The recognizer's answers over the last two seconds (so one doubtful answer mid-line
+        // doesn't switch it off) and how loud the centered voice range is. Speech doesn't count toward singing:
+        // that made audiobooks and podcasts light up.
         let heard = observer.latest
-        let wanted: Float = recognizerFailed ? 1 : {
+        let fresh = recognizerFailed || observer.secondsSinceResult < 3
+        let wanted: Float = recognizerFailed ? 1 : !fresh ? 0 : {
             switch target {
             case .singing: return heard.singing
             case .speech: return heard.speech
             case .both: return max(heard.singing, heard.speech)
             }
         }()
-        let fresh = recognizerFailed || observer.secondsSinceResult < 3
-        let goal = fresh ? wanted : 0
-        presence += (goal - presence) * (1 - exp(-dt / (goal > presence ? 0.2 : 0.9)))
-        let gate = Self.smoothstep(0.12, 0.42, presence)
+        history.add(time: clock, heard: wanted, raw: raw)
+        presence = recognizerFailed ? 1 : Gate.presence(heard: wanted, history: history, raw: raw, now: clock)
+        let gate = Self.smoothstep(tuning.gateAt - 0.1, tuning.gateAt + 0.1, presence)
         level = raw * gate
         detectWords(dt: dt)
+    }
+
+    /// The last two seconds of the recognizer's answers and of the sound-only level, one entry per frame.
+    private struct History {
+        private var time: [Double] = []
+        private var heard: [Float] = []
+        private var raw: [Float] = []
+
+        mutating func add(time t: Double, heard h: Float, raw r: Float) {
+            time.append(t); heard.append(h); raw.append(r)
+            var old = 0
+            while old < time.count, time[old] < t - 2 { old += 1 }
+            if old > 0 { time.removeFirst(old); heard.removeFirst(old); raw.removeFirst(old) }
+        }
+
+        mutating func clear() { time.removeAll(); heard.removeAll(); raw.removeAll() }
+
+        /// Highest and mean recognizer answer, and mean level, over the last `seconds`.
+        func summary(seconds: Double, now: Double) -> (maxHeard: Float, meanHeard: Float, meanRaw: Float) {
+            var top: Float = 0, sumHeard: Float = 0, sumRaw: Float = 0, count: Float = 0
+            for i in stride(from: time.count - 1, through: 0, by: -1) where time[i] > now - seconds {
+                top = max(top, heard[i]); sumHeard += heard[i]; sumRaw += raw[i]; count += 1
+            }
+            return count > 0 ? (top, sumHeard / count, sumRaw / count) : (0, 0, 0)
+        }
+    }
+    private var history = History()
+
+    /// Logistic regression fit with scripts/tune-voice/fit_gate.py on 13 songs (Demucs stems say where the singing is)
+    /// and 5 talk-only clips (audiobooks, a podcast, talk radio, stand-up), checked on 7 other songs and 4 other clips.
+    private enum Gate {
+        static func presence(heard: Float, history: History, raw: Float, now: Double) -> Float {
+            let last1 = history.summary(seconds: 1, now: now)
+            let last2 = history.summary(seconds: 2, now: now)
+            let half = history.summary(seconds: 0.5, now: now)
+            let z = 3.777 * heard + 2.074 * last1.maxHeard + 4.954 * last2.maxHeard + 3.207 * last1.meanHeard
+                + 1.61 * raw + 2.175 * half.meanRaw - 5.549
+            return 1 / (1 + exp(-z))
+        }
     }
 
     /// Lets go of the recognizer and resets (Voice switched off).
@@ -141,7 +263,9 @@ final class VoiceDetector {
         streamStart = nil
         if let old { queue.async { old.completeAnalysis() } }
         observer.reset()
-        level = 0; word = 0; raw = 0; presence = 0; pitch = nil; smoothPitch = nil
+        level = 0; word = 0; raw = 0; presence = 0; pitch = nil; smoothPitch = nil; candidate = nil; salience = 0
+        recentNotes.removeAll()
+        history.clear()
         envelope = 0; reference = -60
     }
 
@@ -161,7 +285,7 @@ final class VoiceDetector {
 
         let binHz = Float(sampleRate) / Float(n)
         let k0 = max(1, Int(200 / binHz)), k1 = min(half - 1, Int(4000 / binHz))
-        var centerSum: Float = 0, midSum: Float = 0
+        var centerSum: Float = 0
         for k in 0..<half {
             // Roughly the part panned to the middle: mid power that side power doesn't explain.
             let c = max(0, powerM[k] - powerS[k])
@@ -171,27 +295,16 @@ final class VoiceDetector {
             let hz = Float(k) * binHz
             let weight: Float = hz < 300 ? 0.5 : (hz > 3500 ? 0.5 : 1)
             centerSum += c * weight
-            midSum += powerM[k] * weight
         }
-        // Pitched: a sung or spoken syllable is one strong stack of harmonics. Drums, pads and chords aren't,
-        // and the stack falls apart between words, so this moves with every syllable.
-        let harmonic = estimatePitch(binHz: binHz, dt: dt)
-        let pitched = Self.smoothstep(3.5, 8, harmonic)
-        // Centered: how much of the voice range sits in the middle.
-        let share = midSum > 0 ? centerSum / midSum : 0
-        let centered = Self.smoothstep(0.25, 0.7, share)
+        estimatePitch(binHz: binHz, dt: dt)
 
-        // Loudness of the centered voice range against its own recent loudest (an auto level, like the bars').
+        // Loudness of the centered voice range against its own recent loudest (an auto level, like the bars'). On its
+        // own this follows the isolated vocal better than anything mixed into it (pitch strength, how centered).
         let db = 10 * log10(max(centerSum, 1e-12))
-        if db > reference { reference += (db - reference) * 0.5 } else { reference -= 2.5 * dt }
+        if db > reference { reference += (db - reference) * 0.5 } else { reference -= tuning.levelDecay * dt }
         reference = max(reference, -70)
-        let loud = min(1, max(0, (db - (reference - 18)) / 18))
-
-        parts = (loud, centered, harmonic)
-        // Layered vocals (a chorus, doubled lines) have no single pitch standing out; there the loudness of the
-        // voice range carries the motion, and the recognizer decides whether it's a voice at all.
-        let target = max(pitched * (0.35 + 0.65 * loud), 0.55 * loud) * centered
-        let rate: Float = target > envelope ? 1 - pow(0.45, dt * 60) : 1 - exp(-dt / 0.12)
+        let target = min(1, max(0, (db - (reference - tuning.levelRange)) / tuning.levelRange))
+        let rate: Float = target > envelope ? 1 - pow(0.45, dt * 60) : 1 - exp(-dt / tuning.levelRelease)
         envelope += (target - envelope) * rate
         raw = envelope
     }
@@ -208,70 +321,77 @@ final class VoiceDetector {
         vDSP_zvmags(&split, 1, out, 1, vDSP_Length(half))
     }
 
-    /// The singer's note: the pitch whose harmonics line up best with the centered sound (82 Hz to 1 kHz).
-    /// Returns how far that pitch stands out from the rest (about 2 to 4 for plain music, 6 to 12 for a voice).
-    private func estimatePitch(binHz: Float, dt: Float) -> Float {
-        func magnitude(_ hz: Float) -> Float {
-            let x = hz / binHz
-            let i = Int(x)
-            guard i >= 1, i + 1 < half else { return 0 }
-            let f = x - Float(i)
-            return center[i] * (1 - f) + center[i + 1] * f
+    /// The singer's note: the pitch whose harmonics line up best with the centered sound. The spectrum is flattened
+    /// first (each bin over its neighbourhood), so the loud bass and kick can't win just by being loud, and harmonics
+    /// below 150 Hz don't count.
+    private func estimatePitch(binHz: Float, dt: Float) {
+        let t = tuning
+        if layout.key != Layout.Key(binHz: binHz, tuning: t) { layout = Layout(binHz: binHz, half: half, tuning: t) }
+        let top = layout.top
+        // Flatten: each bin over the average of its neighbourhood (about a sixth of an octave), to the power `flatten`.
+        running[0] = 0
+        for k in 0..<top { running[k + 1] = running[k] + center[k] }
+        for k in 1..<top {
+            let a = layout.from[k], b = layout.to[k]
+            flat[k] = (running[b] - running[a]) / Float(b - a) + 1e-9
         }
-        var best: Float = 0, bestNote: Float = 40, total: Float = 0, candidates: Float = 0
-        var scores: [Float] = []
-        scores.reserveCapacity(130)
-        // Candidates a third of a semitone apart, MIDI 40 (82 Hz) to 83 (988 Hz).
-        var note: Float = 40
-        while note <= 83 {
-            let f0 = 440 * pow(2, (note - 69) / 12)
-            var score: Float = 0, weight: Float = 1
-            for h in 1...6 {
-                score += magnitude(f0 * Float(h)) * weight
-                weight *= 0.82
+        var count = Int32(top - 1)
+        layout.exponents.withUnsafeBufferPointer { vvpowf(flat + 1, $0.baseAddress!, flat + 1, &count) }
+        vDSP_vdiv(flat + 1, 1, center + 1, 1, flat + 1, 1, vDSP_Length(top - 1))   // center / mean^flatten
+        // The strongest of each bin and its two neighbours, so a harmonic between bins still counts fully.
+        for k in 1..<(top - 1) { peak3[k] = max(flat[k - 1], flat[k], flat[k + 1]) }
+        // Every candidate note (a fifth of a semitone apart): its harmonics' peaks, the higher ones weighing less.
+        var best: Float = 0, bestIndex = 0, total: Float = 0
+        let harmonics = layout.harmonics
+        for c in 0..<layout.notes {
+            var score: Float = 0
+            let row = c * harmonics
+            for h in 0..<harmonics {
+                let bin = layout.bins[row + h]
+                if bin > 0 { score += peak3[bin] * layout.weights[h] }
             }
-            scores.append(score)
             total += score
-            candidates += 1
-            if score > best { best = score; bestNote = note }
-            note += 1.0 / 3
+            if score > best { best = score; bestIndex = c }
         }
-        // Harmonic sums favour the octave below; take the octave above when it scores nearly as well.
-        let upIndex = Int(((bestNote + 12) - 40) * 3 + 0.5)
-        if best > 0, upIndex >= 0, upIndex < scores.count, scores[upIndex] >= best * 0.8 {
-            bestNote += 12
-            best = scores[upIndex]
-        }
-        let ratio = candidates > 0 && total > 0 ? best / (total / candidates) : 0
-        let confident = ratio > 4.5
-        if confident {
+        let bestNote = t.lowestNote + Float(bestIndex) * Layout.step
+        salience = total > 0 ? best / (total / Float(layout.notes)) : 0
+        candidate = best > 0 ? bestNote : nil
+        if salience > t.confident {
             unsure = 0
-            var heardNote = bestNote
+            // The middle of the last few confident notes, so a stray frame doesn't move the color.
+            recentNotes.append(bestNote)
+            if recentNotes.count > max(1, t.noteMedian) { recentNotes.removeFirst(recentNotes.count - max(1, t.noteMedian)) }
+            var heardNote = recentNotes.sorted()[recentNotes.count / 2]
             if let current = smoothPitch {
-                // Fold octave jumps back toward the melody so the color doesn't flicker.
-                while heardNote - current > 7 { heardNote -= 12 }
-                while current - heardNote > 7 { heardNote += 12 }
-                smoothPitch = current + (heardNote - current) * (1 - pow(0.8, dt * 60))
+                if t.octaveSnap {
+                    // A jump of about an octave is usually the tracker, not the singer: fold it back.
+                    let folded = heardNote - 12 * ((heardNote - current) / 12).rounded()
+                    if abs(heardNote - current) > 9, abs(folded - current) < 2.5 { heardNote = folded }
+                } else {
+                    while heardNote - current > 7 { heardNote -= 12 }
+                    while current - heardNote > 7 { heardNote += 12 }
+                }
+                smoothPitch = current + (heardNote - current) * (1 - pow(t.noteSmoothing, dt * 60))
             } else {
                 smoothPitch = heardNote
             }
         } else {
+            recentNotes.removeAll(keepingCapacity: true)
             unsure += dt
             if unsure > 0.6 { smoothPitch = nil }
         }
         pitch = smoothPitch
-        return ratio
     }
 
     /// A word starts when the voice jumps up from where it just was.
     private func detectWords(dt: Float) {
         word = 0
         wordCooldown -= dt
-        floorLevel = level < floorLevel ? level : floorLevel + (level - floorLevel) * (1 - exp(-dt / 0.25))
+        floorLevel = level < floorLevel ? level : floorLevel + (level - floorLevel) * (1 - exp(-dt / tuning.wordFloor))
         if !wordArmed {
             wordPeak = max(wordPeak, level)
             if level < wordPeak * 0.85 || level < 0.12 { wordArmed = true }
-        } else if wordCooldown <= 0, level > 0.2, level - floorLevel > 0.09 {
+        } else if wordCooldown <= 0, level > 0.2, level - floorLevel > tuning.wordRise {
             word = min(1, (level - floorLevel) * 2.5)
             wordArmed = false
             wordPeak = level
@@ -283,7 +403,8 @@ final class VoiceDetector {
         envelope *= exp(-dt / 0.12)
         raw = envelope
         presence *= exp(-dt / 0.9)
-        level = raw * Self.smoothstep(0.12, 0.42, presence)
+        history.clear()
+        level = raw * Self.smoothstep(tuning.gateAt - 0.1, tuning.gateAt + 0.1, presence)
         word = 0
         unsure += dt
         if unsure > 0.6 { smoothPitch = nil; pitch = nil }
@@ -334,9 +455,9 @@ final class VoiceDetector {
         guard sampleRate > 0, let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else { return }
         do {
             let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
-            // One-second looks, every half second: quick enough to notice a singer coming in.
-            request.windowDuration = CMTime(seconds: 1, preferredTimescale: 48_000)
-            request.overlapFactor = 0.5
+            // One-second looks (shorter ones miss most singing), overlapping so a new answer comes every quarter second.
+            request.windowDuration = CMTime(seconds: tuning.recognizerWindow, preferredTimescale: 48_000)
+            request.overlapFactor = tuning.recognizerOverlap
             let analyzer = SNAudioStreamAnalyzer(format: format)
             try analyzer.add(request, withObserver: observer)
             stream = analyzer

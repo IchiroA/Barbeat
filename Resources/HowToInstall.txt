@@ -1,7 +1,7 @@
 Barbeat
 =======
 
-Turns your Mac's menu bar into a light show that moves with whatever you're playing.
+Turns your Mac's menu bar, and the rest of your screen, into a light show that moves with whatever you're playing.
 
 Made by Ichiro Ashihara (@IchiroA). © 2026 Ichiro Ashihara. Open source under the MIT License.
 
@@ -22,9 +22,16 @@ Install
 If macOS won't open the app
 Open System Settings > Privacy & Security, scroll down, and click "Open Anyway" next to Barbeat.
 
+New in 2.0
+Beat pulse: the whole screen pulses on every beat (a glow from the edges, a wash of color, or the screen's
+brightness), locked to the song's tempo. Kaleidoscope: a show mode that turns your screen into a kaleidoscope
+moving with the music; click anywhere or press Esc to stop it. Both are at the bottom of the menu bar panel.
+The kaleidoscope uses the same screen recording permission as Screen colors; frames go straight to the
+graphics chip and are thrown away.
+
 Settings
-Click the bar-chart icon in the menu bar to pick a style (LED, Bars, Center, Glow, Pulse, VU, Aura,
-Waterfall, Scope, Sparks), colors (Screen colors follow what's on screen; or make your own under Custom),
+Click the bar-chart icon in the menu bar for quick controls, and Settings... for everything else.
+Pick a style (LED, Bars, Center, Glow, Pulse, VU, Aura, Waterfall, Scope, Sparks), colors (Screen colors follow what's on screen; or make your own under Custom),
 color drift, Stereo or full-width layout, brightness, Low/Mid/High boost, spark power, the screen edge glow
 (and how far it reaches into the screen), Keep menu bar text readable, whether to show over full-screen
 apps (just the edge glow, or the menu bar visuals too), and Launch at login.

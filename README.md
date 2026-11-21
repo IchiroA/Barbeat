@@ -2,7 +2,7 @@
 
 https://ichiroa.github.io/Barbeat/
 
-A macOS menu bar app that turns the strip behind the menu bar into a live light show
+A macOS menu bar app that turns the strip behind the menu bar, and the rest of your screen, into a live light show
 driven by whatever your Mac is playing.
 
 - **Screen colors**: the menu bar, the glow around the screen and your lights take their colors from what you're
@@ -10,7 +10,11 @@ driven by whatever your Mac is playing.
 - **Ten styles**, a screen edge glow, palettes or your own colors, and narrower bars on ultrawide screens.
 - **Scenes**: almost every setting in one click, switching on their own when an app plays or you're on a call, and
   exported as JSON files to back up or share with friends.
-- **Voice**: colors and a glow that follow the singer.
+- **Beat pulse** (new in 2.0): the whole screen pulses on every beat: a glow from the edges you choose, a wash of
+  color, or the display's brightness itself, locked to the song's tempo like a DJ app's beat grid.
+- **Kaleidoscope** (new in 2.0): a show mode that turns your screen into a kaleidoscope (Mirror, Crystal or Tunnel)
+  that turns with the tempo, zooms on every beat and opens a flower of the music's spectrum.
+- **Voice**: colors and a glow that follow the singer, tuned against isolated vocals.
 - **Lights**: Philips Hue and WLED / Art-Net lights in the same colors, with mirror, sparkles and a sleep timer.
 - **`barbeat://` links** for Shortcuts, Stream Deck and Raycast, and updates that install themselves (with your OK).
 
@@ -89,19 +93,54 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
 - **Sleep timer** (Lights page, or the moon in the panel's Lights row): 15–90 min; the lights fade out over the last
   minute and the give-back ends with them off (Hue: the saved state with every light off and no scene recall; WLED:
   black plus its JSON API `on: false`). With a timer running, music stopping is bedtime too.
-- **Menu bar icon** (`MenuBarIcon.swift`): four template-image bars following bass to treble at ~12 fps while music
-  plays; still with Reduce motion or when switched off under General.
+- **Menu bar icon** (`MenuBarIcon.swift`): four template-image bars following bass to treble while music plays (a
+  2x bitmap, redrawn at most 6 times a second and only when a bar moves 1.5 pt: every change makes macOS re-render
+  the menu bar item, which costs about as much as the window server's whole frame); still with Reduce motion or when
+  switched off under General. It reads the mid spectrum, so it only moves when something computes that (Full width
+  layout, Lights, Beat pulse or the Kaleidoscope).
 - **`barbeat://` links** (`LinkCommands.swift`, `CFBundleURLTypes` in Info.plist): `on`, `off`, `toggle`,
   `scene/<name>`, `style/<name>`, `screen-colors|lights|voice/on|off|toggle`, `sleep/<minutes>|off`,
   `settings/<page>`.
-- **Voice** (switch and Options… in the panel): reacts to singing, speech or both. Per frame it measures the sound
-  panned to the middle in the voice range, mostly how strongly one pitch stands out (a sung syllable), and Apple's
-  sound recognizer (SoundAnalysis, 1 s windows every 0.5 s) gates it, so instrumentals stay quiet. About 0.12 ms per
-  frame including the recognizer (~0.7% of a core, measured offline with `scripts/tune-voice`). Effects: **Voice
+- **Voice** (switch and Options… in the panel): reacts to singing, speech or both. Apple's sound recognizer
+  (SoundAnalysis, 1 s windows four times a second) says whether a voice is there; a small fitted gate weighs its
+  answers over the last two seconds with the loudness of the centered voice range, so one doubtful answer mid-line
+  doesn't switch the effect off and instrumentals stay quiet (speech never counts toward singing, so audiobooks stay
+  dark). Per frame the level is the loudness of the sound panned to the middle in the voice range (auto-levelled),
+  words are jumps in it, and the pitch comes from harmonic salience on a flattened spectrum (110 Hz to 1 kHz, so the
+  bass can't win). Tuned against Demucs vocal stems (`scripts/tune-voice`). About 0.17 ms per frame including the
+  recognizer (~1% of a core, measured offline). Effects: **Voice
   color** or **Pitch color** (low notes blue → high notes orange) spreads out from the middle of the screen, further
   with louder singing (Strength sets how far); **Voice glow** swells out of the notch with each word; **Show on**
   menu bar / edge glow / lights. Each light device also has Voice: **Follow the singer** or **Sparkles on words**.
   Settings live in `voice.*`.
+- **Beat pulse** (`BeatPulse.swift`, engine in `BeatPulseEngine.swift`; switch and Options… in the panel, its own
+  Settings page): the whole screen pulses with the beat, without changing anything else. Looks: **Glow from the
+  edges** (a glow coming in from the chosen edges, all four by default, middle clear), **Whole screen** (a see-through wash, at most 35%) in
+  Barbeat's colors or white, or **Brightness** (the display dims between beats, up to 40%, by scaling its own
+  transfer table, thinned to 256 steps and sent at most 30 times a second except on a beat; given back when the music stops, the pulse is switched off or Barbeat quits, and macOS restores it
+  on any exit). The glow looks are click-through windows over each screen (level Dock + 1, under the menu bar) whose
+  layer opacity follows the beat; the shape is a small mask made once. Beats come from the beat clock (below) once
+  it's sure of the tempo, with the kick right after each beat setting its height; before that, from bass hits judged
+  against the song's own recent kicks; never more than 3 big rises a second, and softer, slower beats with Reduce motion. Covers the same
+  screens as the menu bar visuals. Settings live in `pulse.*` (not part of scenes yet).
+- **Beat clock** (`BeatTracker.swift`): the tempo and a beat clock locked to it, like a DJ app's beat grid, for the
+  beat pulse and the kaleidoscope. Onsets (how sharply the bars rise, bass counting double) at 60 a second;
+  autocorrelation of the last 8 s between 60 and 200 BPM with a preference around 120 (so 174 drum & bass reads 87);
+  a clock that onsets near a beat nudge into line (off-beat bass doesn't), re-aligned to the best-fitting grid when new
+  or drifting, firing 25 ms early to make up for the bars' rise. ~0.003 ms per frame. `scripts/tune-beats` scores it on
+  files (with true beat times for synthetic tracks): 97–100% of beats within 60 ms on house, hip-hop, swing and 3/4
+  tracks, against 0–33% for kick detection; known song tempos within 1–2 BPM. The Beat pulse and Kaleidoscope
+  pages show the tempo it hears.
+- **Kaleidoscope** (`Kaleidoscope.swift`; Start and Options… in the panel, its own Settings page): a show mode. It
+  captures the screen the pointer is on with ScreenCaptureKit (half the screen's pixels, 60 frames a second, 30 on
+  battery; everything but its own window, so Barbeat's visuals spin along), mirrors it into 6–12 wedges in a Metal
+  shader and draws that in a window over the whole screen under the menu bar (level Dock + 2). Patterns: Mirror,
+  Crystal (the wedge folded four more times) and Tunnel (log-polar, flowing on the beat). Colors: Natural, Vivid or
+  tinted with Barbeat's palette; a music flower (32 spectrum bands as petals in Barbeat's colors) and a glow (a
+  mipmapped copy of the frame) that swells on the beat. With a steady tempo it turns one wedge per bar at the middle
+  setting and zooms on every beat; its middle can wander across the screen. Click
+  anywhere or press Esc to stop (or Stop in the panel). Needs Screen Recording; frames go straight to the GPU.
+  Options live in `kaleidoscope.*`; whether it's running is never saved. About 5% of a core more while it runs.
 - **Updates**: about once a day (and from "Check for Updates…" in the panel footer) Barbeat reads
   `api.github.com/repos/IchiroA/Barbeat/releases/latest`, compares the tag (`v1.11` → 1.11) with its own version,
   and offers it. Update downloads the release's `Barbeat*.zip`, unzips it next to the app, and installs it only if it
@@ -210,6 +249,10 @@ The icon is drawn by `scripts/make-icon.swift` (`swift scripts/make-icon.swift` 
 | `--pretend-full-screen <gap>` | Lays out the windows as if an app were in full screen, with a band of `gap` points above it (49 on a notched screen, 0 without); `--verbose` prints each screen's layout |
 | `--voice-demo` | A made-up singer (phrases, words, a wandering melody) drives the Voice effects, without music |
 | `--voice-snapshot out.png` | Renders the Voice window offscreen and saves it, then quits |
+| `--pulse-snapshot out.png` | Draws the beat pulse's edge glow (on the saved sides) and whole-screen wash over a grey screen, then quits |
+| `--kaleidoscope-image picture.png out.png [mirrors] [mirror\|crystal\|tunnel]` | Draws the kaleidoscope of a picture offscreen (no screen capture), then quits |
+| `--kaleidoscope-start` | Starts the kaleidoscope a second after launch, only if Screen Recording is already allowed |
+| `--snapshot-delay N` | With `--settings-snapshot`: waits N seconds instead of 2.5 (say, for the beat clock to lock on in demo mode) |
 | `--update-test` | Checks for an update now, downloads and verifies it, prints what happened and quits (never installs or shows a dialog) |
 | `--update-feed URL` | Reads that JSON instead of GitHub's latest release (to test the updater) |
 | `--settings-snapshot out.png [page]` | Renders the Settings window offscreen at that page (screen, scenes, look, sound, glow, lights, voice, general), then quits; `--scenes-expand` opens the first scene's details |
@@ -225,11 +268,20 @@ The icon is drawn by `scripts/make-icon.swift` (`swift scripts/make-icon.swift` 
 
 Example: `"build/Barbeat.app/Contents/MacOS/Barbeat" --demo --snapshot /tmp/eq.png`
 
-`scripts/tune-voice/main.swift` plays a song through the voice detector and prints a timeline (sound-only signal, the recognizer's singing/speech confidence, the gated level, words, pitch) and the time per frame.
+`scripts/tune-voice/main.swift` plays a song through the voice detector and prints a timeline (sound-only signal, the recognizer's singing/speech confidence, the gated level, words, pitch) and the time per frame. `--dump frames.csv` writes every frame instead, and `V_<name>=value` environment variables change `VoiceDetector.Tuning`.
+
+To measure the voice detector against real vocals:
+
+1. `scripts/tune-voice/make_refs.py songs.txt refs` separates each song with Demucs (htdemucs, in its own venv; about 90 s per 4-minute song on the CPU) and saves the isolated vocal's loudness and pitch at 60 frames a second. `songs.txt` has one song per line, `tune|id|seconds|path` or `test|…` (keep it outside the repo; it holds library paths). Use a mix of genres plus instrumentals.
+2. `scripts/tune-voice/score.py songs.txt refs .build/tune-voice [tune|test]` runs the detector on every song and prints, per song and on average: how much of the singing the gate and the effect cover, false triggers per minute with no voice, how late they switch on, dropouts per minute mid-phrase, how well the level follows the vocal's loudness, word F1 against syllable starts, and pitch accuracy. Tune on the `tune` songs and check on the `test` ones.
+3. `scripts/tune-voice/fit_gate.py songs.txt talk.txt refs .build/tune-voice` refits `VoiceDetector.Gate` (talk.txt: audiobooks, podcasts, talk radio, stand-up, all counted as "no singing") and prints its Swift.
+
+Measured in November 2026 on 21 songs by 21 artists (13 tuning, 8 held out, three of them instrumentals) and 9 talk clips, the held-out songs went from 56% of singing covered, 4.3 dropouts a minute and 1.1 s to switch on (the 1.12 detector) to 63%, 2.2 and 0.9 s, with fewer false triggers; the level's correlation with the vocal went from 0.11 to 0.32, word F1 from 0.33 to 0.47, and the pitch within a semitone from 25% to 56%.
 
 `scripts/tune-analyzer/main.swift` plays a song file through the analyzer offline (no sound) and prints
 bar, VU meter and pulse statistics (`.build/tune song.mp3 64 stereo 0`), plus the light show's brightness and flash
-rate for 1 light (Pulse), 3 lights (Bands) and 9 lights with sparkles at their busiest; every light must stay at
+rate for 1 light (Pulse), 3 lights (Bands) and 9 lights with sparkles at their busiest, and the beat pulse's
+(beats a minute, flashes a second, normal and with Reduce motion); every light and the pulse must stay at
 or under 3 flashes a second. The tuning constants are at the top of `Sources/MenuBarEQ/SpectrumAnalyzer.swift`.
 
 ## Code map

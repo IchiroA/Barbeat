@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Barbeat – Music visualizer for your Mac's menu bar</title>
-  <meta name="description" content="Barbeat is a free music visualizer for macOS. It turns your Mac's menu bar and screen edges into a light show that moves with your music, takes its colors from what's on screen, follows the singer, and can drive Philips Hue and WLED lights.">
+  <meta name="description" content="Barbeat is a free music visualizer for macOS. It turns your Mac's menu bar and screen edges into a light show that moves with your music, takes its colors from what's on screen, follows the singer, pulses the whole screen on the beat, turns it into a kaleidoscope, and can drive Philips Hue and WLED lights.">
   <link rel="canonical" href="https://ichiroa.github.io/Barbeat/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://ichiroa.github.io/Barbeat/">
   <meta property="og:title" content="Barbeat – Music visualizer for your Mac's menu bar">
-  <meta property="og:description" content="A light show in your Mac's menu bar that moves with your music and takes its colors from what's on screen.">
+  <meta property="og:description" content="A light show in your Mac's menu bar and across your screen that moves with your music, locks to the beat and takes its colors from what's on screen.">
   <meta property="og:image" content="https://ichiroa.github.io/Barbeat/images/hero.jpg">
   <meta property="og:image:width" content="2000">
   <meta property="og:image:height" content="1292">
@@ -24,6 +24,8 @@
     <a class="brand" href="#top"><img src="images/icon.png" alt="" width="28" height="28">Barbeat</a>
     <nav aria-label="Sections">
       <a href="#screen-colors">Screen colors</a>
+      <a class="optional" href="#pulse">Beat pulse</a>
+      <a class="optional" href="#kaleidoscope">Kaleidoscope</a>
       <a class="optional" href="#start">Quick start</a>
       <a class="optional" href="#styles">Styles</a>
       <a class="optional" href="#settings">Settings</a>
@@ -46,6 +48,7 @@
       <a class="button primary" href="https://github.com/IchiroA/Barbeat/releases/latest">Download for Mac</a>
       <a class="button" href="https://github.com/IchiroA/Barbeat">View on GitHub</a>
     </div>
+    <p class="fine"><strong>New in 2.0:</strong> <a href="#pulse">the whole screen pulses with the beat</a>, a <a href="#kaleidoscope">kaleidoscope show mode</a>, effects locked to the song's tempo, and sharper voice detection.</p>
     <p class="fine">Free and open source · Apple Silicon (M1 or newer) · macOS 14.2 or later · Signed and notarized by Apple</p>
     <figure>
       <div class="shot glow"><img src="images/hero.jpg" alt="A concert stage lit magenta on the left, violet and blue in the middle and cyan on the right. Barbeat's bars in the menu bar take the same colors as the lights below them." width="2000" height="1292"></div>
@@ -105,6 +108,96 @@
     </div>
   </section>
 
+  <section id="pulse">
+    <div class="wrap">
+      <div class="feature-head">
+        <span class="eyebrow gradient-text">New in 2.0 · Beat pulse</span>
+        <h2>The whole screen moves with the beat.</h2>
+        <p class="lead">Turn on <strong>Beat pulse</strong> in the panel and your screen pulses on every beat, in Barbeat's colors or white. It has its own switch and doesn't change anything else: clicks go straight through and the menu bar stays as it is.</p>
+      </div>
+      <figure class="shot"><img src="images/pulse-edges.jpg" alt="The concert stage with a violet glow coming in from every edge of the screen on a beat, while the middle of the picture stays clear." width="2000" height="1292" loading="lazy"></figure>
+      <figcaption>Glow from the edges, on a beat: light floods in from every side while the middle stays clear.</figcaption>
+
+      <div class="cards" style="margin-top: 28px;">
+        <div class="card">
+          <span class="tag">Glow from the edges</span>
+          <h4>Light pours in from the sides</h4>
+          <p class="muted">A glow comes in from the edges on every beat and fades before the next one. Choose which sides glow: left, top, right and bottom are all on to start.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Whole screen</span>
+          <h4>A wash of color</h4>
+          <p class="muted">A see-through wash of color over everything on each beat, never more than about a third of the way.</p>
+        </div>
+        <div class="card">
+          <span class="tag">Brightness</span>
+          <h4>The screen itself breathes</h4>
+          <p class="muted">The display dims between beats and comes back to full brightness on each one, like stage lights. Barbeat gives the display back as soon as the music stops, the pulse is off, or it quits.</p>
+        </div>
+      </div>
+
+      <h3>On the beat, not just on the bass</h3>
+      <p class="prose muted">Barbeat works out the song's tempo and keeps a beat clock locked to it, like a DJ app's beat grid. Effects land on every beat, keep time through a breakdown, and ignore bass notes that fall between the beats. It locks on within a few seconds of music, and the Beat pulse page shows the tempo it hears, like <strong>128 BPM</strong>. Music without a steady beat, like a waltz or an ambient track, simply pulses with its bass hits.</p>
+
+      <div class="facts">
+        <div class="fact"><strong>Strength</strong><span>How bright the glow gets on a beat, or how far the screen dims between beats (up to 40%).</span></div>
+        <div class="fact"><strong>Safe to watch</strong><span>Never more than three flashes a second. With Reduce motion on, beats are softer and slower.</span></div>
+        <div class="fact"><strong>Light on the Mac</strong><span>The glow's shape is drawn once; each beat only changes its color and brightness.</span></div>
+        <div class="fact"><strong>Same screens</strong><span>It covers the screens the menu bar visuals use, and full-screen apps too when Show over full-screen apps is on.</span></div>
+      </div>
+      <figure class="shot" style="margin-top: 28px;">
+        <img src="images/settings-pulse.jpg" alt="Settings › Beat pulse: the switch and the tempo it hears (120 BPM), the three looks with Glow from the edges chosen, checkboxes for the left, top, right and bottom sides, Barbeat's colors or White, and the strength on each beat" width="1640" height="1232" loading="lazy">
+      </figure>
+      <figcaption>Settings › Beat pulse, with the tempo Barbeat hears at the top right.</figcaption>
+      <p class="note">Brightness changes the display's color curve, as f.lux and similar apps do, so it may not mix well with them. macOS puts the display back by itself if Barbeat quits for any reason.</p>
+    </div>
+  </section>
+
+  <section id="kaleidoscope">
+    <div class="wrap">
+      <div class="feature-head">
+        <span class="eyebrow gradient-text">New in 2.0 · Kaleidoscope</span>
+        <h2>Your screen, as a kaleidoscope.</h2>
+        <p class="lead">Click <strong>Start</strong> next to Kaleidoscope in the panel and whatever is on your screen, a concert, a music video, your desktop, becomes a kaleidoscope that turns with the tempo and zooms on every beat. Barbeat's own menu bar and edge visuals spin in it too. Click anywhere or press Esc to stop.</p>
+      </div>
+      <div class="trio">
+        <figure>
+          <img src="images/kaleidoscope-crystal.jpg" alt="Crystal pattern: a glowing eight-pointed star of blue and violet folds with cyan rays, made from a screenshot" width="1280" height="800" loading="lazy">
+          <figcaption><strong>Crystal:</strong> the wedges folded again and again into a star.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/kaleidoscope-tunnel.jpg" alt="Tunnel pattern: rings of magenta, cyan and violet panels like stained glass, leading into the middle" width="1280" height="800" loading="lazy">
+          <figcaption><strong>Tunnel:</strong> stained glass flowing toward you, a step on every beat.</figcaption>
+        </figure>
+        <figure>
+          <img src="images/kaleidoscope-mirror.jpg" alt="Mirror pattern: mirrored wedges of a settings window, with cyan and pink music-flower petals opening in the middle" width="1280" height="800" loading="lazy">
+          <figcaption><strong>Mirror:</strong> the classic, with the music flower opening in the middle.</figcaption>
+        </figure>
+      </div>
+      <p class="muted" style="margin-top: 12px;">All three were made from a screenshot of Barbeat's Settings window.</p>
+      <div class="prose" style="margin-top: 22px;">
+        <dl>
+          <dt>Pattern and mirrors</dt>
+          <dd>Mirror, Crystal or Tunnel, with 6, 8, 10 or 12 mirrored wedges.</dd>
+          <dt>Colors, music flower and glow</dt>
+          <dd><strong>Natural</strong>, <strong>Vivid</strong>, or tinted with <strong>Barbeat's colors</strong>. The music flower draws the spectrum as petals in Barbeat's colors, opening and closing with the sound, and a soft glow swells on every beat.</dd>
+          <dt>Motion</dt>
+          <dd>With a steady tempo it turns one wedge every bar at the middle setting, and every beat zooms in a little (and pushes the tunnel on). <strong>Wander</strong> lets its middle drift slowly across the screen, so the picture keeps changing.</dd>
+        </dl>
+      </div>
+      <div class="facts">
+        <div class="fact"><strong>A show mode</strong><span>It covers the screen the pointer is on, everything but the menu bar, and never starts by itself.</span></div>
+        <div class="fact"><strong>Nothing is recorded</strong><span>Frames go straight to the graphics chip at half the screen's resolution and are thrown away.</span></div>
+        <div class="fact"><strong>Smooth</strong><span>60 frames a second (30 on battery), for about 5% of one processor core while it runs.</span></div>
+      </div>
+      <figure class="shot" style="margin-top: 28px;">
+        <img src="images/settings-kaleidoscope.jpg" alt="Settings › Kaleidoscope: Start Kaleidoscope, Mirror, Crystal or Tunnel, Natural, Vivid or Barbeat's colors, the music flower and glow checkboxes, 6 to 12 mirrors, Turning and Beat zoom sliders and Wander" width="1640" height="1402" loading="lazy">
+      </figure>
+      <figcaption>Settings › Kaleidoscope.</figcaption>
+      <p class="note">The kaleidoscope needs Screen Recording, the same permission as Screen colors. Copy-protected video looks black to every app, so it's black in the kaleidoscope too. With Reduce motion on, it turns slowly and doesn't zoom.</p>
+    </div>
+  </section>
+
   <section id="start">
     <div class="wrap">
       <span class="eyebrow gradient-text">Quick start</span>
@@ -114,7 +207,7 @@
         <li><strong>Open it.</strong><p>macOS checks that you want to open an app from the internet: click Open. A small four-bar icon appears in the menu bar (Barbeat has no Dock icon), and a welcome window shows what it can do.</p></li>
         <li><strong>Allow system audio.</strong><p>macOS asks to let Barbeat record system audio: click Allow. Barbeat only listens so it can animate; nothing is recorded or saved.</p></li>
         <li><strong>Turn on Screen colors.</strong><p>Click <strong>Turn On Screen Colors</strong> in the welcome window (or flip its switch at the top of the panel). Barbeat explains what it reads, then macOS asks to let it record the screen: allow it, and if macOS offers Quit &amp; Reopen, click it.</p></li>
-        <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars and a deep glow around the screen. Click the four-bar icon for quick controls, or <strong>Settings…</strong> for everything else. Changes apply instantly and are remembered.</p></li>
+        <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars and a deep glow around the screen. Click the four-bar icon for quick controls, or <strong>Settings…</strong> for everything else. Changes apply instantly and are remembered. Then try <strong>Beat pulse</strong> and the <strong>Kaleidoscope</strong>, at the bottom of the panel.</p></li>
       </ol>
     </div>
   </section>
@@ -143,9 +236,9 @@
     <div class="wrap">
       <span class="eyebrow gradient-text">Settings</span>
       <h2>The panel and Settings</h2>
-      <p class="lead">Click the four-bar icon in the menu bar for quick controls: the on/off switch, Screen colors, scenes, style, colors, brightness, Lights and Voice. <strong>Settings…</strong> opens a window with everything else, one page per topic.</p>
+      <p class="lead">Click the four-bar icon in the menu bar for quick controls: the on/off switch, Screen colors, scenes, style, colors, brightness, Lights, Voice, Beat pulse and the Kaleidoscope. <strong>Settings…</strong> opens a window with everything else, one page per topic.</p>
       <div class="settings">
-        <div class="panel"><img src="images/panel.png" alt="The Barbeat panel: the on/off switch, the Screen colors card with the colors it sees, a Scenes button showing Chameleon, ten styles, Brightness, Lights and Voice, Settings, Help, Support and Quit, and who made it" width="640" height="1280" loading="lazy"></div>
+        <div class="panel"><img src="images/panel.png" alt="The Barbeat panel: the on/off switch, the Screen colors card with the colors it sees, a Scenes button, ten styles, Brightness, then rows for Lights, Voice, Beat pulse and Kaleidoscope (with a Start button), Settings, Help, Support and Quit, and who made it" width="640" height="1570" loading="lazy"></div>
         <div>
           <p class="group-title">Screen colors</p>
           <dl>
@@ -179,6 +272,18 @@
             <dd>All displays or just the main one, and over full-screen apps: the edge glow on all four sides, plus the bars too if you turn on <strong>Menu bar visuals too</strong> (they step aside whenever you use the menu bar).</dd>
           </dl>
 
+          <p class="group-title">Beat pulse</p>
+          <dl>
+            <dt>Look, Sides, Color, Strength</dt>
+            <dd>Everything about the <a href="#pulse">Beat pulse</a>: a glow from the edges (and which sides), a wash over the whole screen, or the brightness itself, in Barbeat's colors or white, and how strong each beat is. The page shows the tempo Barbeat hears.</dd>
+          </dl>
+
+          <p class="group-title">Kaleidoscope</p>
+          <dl>
+            <dt>Pattern, Colors, Mirrors, Motion</dt>
+            <dd>Start the <a href="#kaleidoscope">Kaleidoscope</a> and choose Mirror, Crystal or Tunnel, its colors, the music flower and glow, how many mirrors, how fast it turns and zooms, and whether it wanders across the screen.</dd>
+          </dl>
+
           <p class="group-title">General</p>
           <dl>
             <dt>Starting up, updates</dt>
@@ -189,7 +294,7 @@
       <figure class="shot" style="margin-top: 36px;">
         <img src="images/settings-screen.jpg" alt="The Settings window on the Screen colors page: a sidebar with Screen colors, Scenes, Look, Sound, Glow and screens, Lights, Voice and General; the page shows the stage picture, the Screen colors switch, the colors it sees, the Ambient light and Main colors cards and the light beam settings" width="1640" height="1784" loading="lazy">
       </figure>
-      <figcaption>Settings opens on Screen colors. Lights and Voice have their own pages too.</figcaption>
+      <figcaption>Settings opens on Screen colors. Lights, Voice, Beat pulse and Kaleidoscope have their own pages too.</figcaption>
     </div>
   </section>
 
@@ -241,7 +346,7 @@
           <dt>Show on</dt>
           <dd>The menu bar, the edge glow and your lights, each on or off. Each light device also has its own Voice option: lights that follow the singer, or white sparkles on words.</dd>
         </dl>
-        <p class="muted">Barbeat finds voices with Apple's sound recognizer, built into macOS, plus its own check for a single pitched voice in the middle of the mix, where most singers are. Instrumental parts stay quiet. It all runs on your Mac and uses about 1% of one processor core.</p>
+        <p class="muted">Barbeat finds voices with Apple's sound recognizer, built into macOS, asked four times a second and weighed over the last two seconds together with how loud the middle of the mix is, where most singers are. So a doubtful moment mid-line doesn't switch the effect off, and instrumental parts and audiobooks stay quiet. The glow follows the singer's own loudness, and the pitch comes from the voice's harmonics, so the bass can't pull it down. It was tuned against isolated vocals from 21 songs, runs on your Mac, and uses about 1% of one processor core.</p>
       </div>
     </div>
   </section>
@@ -310,7 +415,7 @@
         <dt><code>barbeat://sleep/30</code> · <code>barbeat://sleep/off</code></dt>
         <dd>Start the lights' sleep timer (minutes), or cancel it.</dd>
         <dt><code>barbeat://settings/lights</code></dt>
-        <dd>Open Settings at a page: screen, scenes, look, sound, glow, lights, voice or general.</dd>
+        <dd>Open Settings at a page: screen, scenes, look, sound, glow, lights, voice, pulse, kaleidoscope or general.</dd>
       </dl>
     </div>
   </section>
@@ -340,6 +445,18 @@
         <div><p>Copy-protected video looks black to every app that reads the screen, so Barbeat keeps the last colors and picks up again as soon as the picture can be read. The music still moves the bars as usual.</p></div>
       </details>
       <details>
+        <summary>The screen dims and brightens with the music</summary>
+        <div><p>That's the <strong>Brightness</strong> look of the Beat pulse. Switch Beat pulse off in the panel, or choose another look on its Settings page; the display goes back to normal right away.</p></div>
+      </details>
+      <details>
+        <summary>The pulse or the kaleidoscope isn't on the beat</summary>
+        <div><p>Barbeat needs a few seconds of music to lock onto the tempo; until then it follows the bass hits. The Beat pulse page shows the tempo it hears. Music without a steady beat keeps following the bass hits. Tell us about a song it gets wrong by <a href="https://github.com/IchiroA/Barbeat/issues">opening an issue</a>.</p></div>
+      </details>
+      <details>
+        <summary>How do I stop the kaleidoscope?</summary>
+        <div><p>Click anywhere on it, press Esc, or click <strong>Stop</strong> next to Kaleidoscope in the panel. If it doesn't start, allow Barbeat under Privacy &amp; Security › Screen &amp; System Audio Recording (the screen recording list), then try again.</p></div>
+      </details>
+      <details>
         <summary>The menu bar is hard to read</summary>
         <div><p>Turn on <strong>Keep menu bar text readable</strong>. You can also lower Opacity or Brightness, or try a calmer style like Glow or Pulse.</p></div>
       </details>
@@ -353,7 +470,7 @@
       </details>
       <details>
         <summary>Does it use much battery?</summary>
-        <div><p>The drawing runs on the graphics chip. On battery Barbeat draws at 30 frames a second instead of 60, and it stops drawing whenever it's silent. To save more, turn off Screen edge glow or Follow light beams, or flip the switch at the top of the panel.</p></div>
+        <div><p>The drawing runs on the graphics chip. On battery Barbeat draws at 30 frames a second instead of 60, and it stops drawing whenever it's silent. To save more, turn off Screen edge glow or Follow light beams, or flip the switch at the top of the panel. The Beat pulse costs almost nothing; the Kaleidoscope uses about 5% of one processor core while it runs.</p></div>
       </details>
       <details>
         <summary>My Bluetooth headset sounds worse</summary>
@@ -374,7 +491,7 @@
     <div class="wrap prose">
       <span class="eyebrow gradient-text">Privacy</span>
       <h2>Nothing leaves your Mac</h2>
-      <p class="muted">Barbeat doesn't collect anything: no accounts, no analytics, no ads. Sound and screen frames are analyzed live in memory and never recorded, saved or sent. The only network traffic is to lights you set up yourself on your own network, and a once-a-day check for a newer version on GitHub, which you can turn off. Voices are found on your Mac with Apple's built-in sound recognizer. Read the full <a href="privacy.html">privacy policy</a>.</p>
+      <p class="muted">Barbeat doesn't collect anything: no accounts, no analytics, no ads. Sound and screen frames are analyzed live in memory and never recorded, saved or sent; the kaleidoscope's frames go straight to the graphics chip and are thrown away. The only network traffic is to lights you set up yourself on your own network, and a once-a-day check for a newer version on GitHub, which you can turn off. Voices are found on your Mac with Apple's built-in sound recognizer. Read the full <a href="privacy.html">privacy policy</a>.</p>
     </div>
   </section>
 

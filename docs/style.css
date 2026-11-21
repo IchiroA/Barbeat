@@ -111,6 +111,12 @@ li { margin: 4px 0; }
 .pair figcaption { margin: 0; padding: 10px 14px; color: var(--muted); }
 .pair figcaption strong { color: var(--text); }
 @media (max-width: 680px) { .pair { grid-template-columns: 1fr; } }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+.trio figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.trio img { display: block; width: 100%; height: auto; }
+.trio figcaption { margin: 0; padding: 10px 14px; color: var(--muted); }
+.trio figcaption strong { color: var(--text); }
+@media (max-width: 820px) { .trio { grid-template-columns: 1fr; } }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 28px; }
 .fact { border-left: 2px solid; border-image: var(--spectrum) 1; padding: 2px 0 2px 14px; }
 .fact strong { display: block; font-size: 16px; }
