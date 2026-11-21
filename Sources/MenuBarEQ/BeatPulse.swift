@@ -49,16 +49,6 @@ enum PulseColorMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Which edges of the screen glow in the "Glow from the edges" look.
-struct PulseSides: OptionSet, Equatable, Hashable {
-    let rawValue: Int
-    static let left = PulseSides(rawValue: 1), right = PulseSides(rawValue: 2)
-    static let top = PulseSides(rawValue: 4), bottom = PulseSides(rawValue: 8)
-    static let all: PulseSides = [.left, .right, .top, .bottom]
-    /// In the order the Settings page lists them.
-    static let named: [(side: PulseSides, title: String)] = [(.left, "Left"), (.top, "Top"), (.right, "Right"), (.bottom, "Bottom")]
-}
-
 /// The beat pulse preferences, saved to UserDefaults as they change.
 final class PulseSettings: ObservableObject {
     static let shared = PulseSettings()
@@ -70,10 +60,10 @@ final class PulseSettings: ObservableObject {
     /// How strong each beat is, 0.1...1.
     @Published var strength: Double { didSet { defaults.set(strength, forKey: Key.strength) } }
     /// The edges that glow (at least one).
-    @Published var sides: PulseSides { didSet { defaults.set(sides.rawValue, forKey: Key.sides) } }
+    @Published var sides: ScreenSides { didSet { defaults.set(sides.rawValue, forKey: Key.sides) } }
 
     /// A switch for one side; the last side that's on can't be switched off.
-    func side(_ side: PulseSides) -> Binding<Bool> {
+    func side(_ side: ScreenSides) -> Binding<Bool> {
         Binding(get: { self.sides.contains(side) },
                 set: { on in
                     if on { self.sides.insert(side) } else if self.sides != side { self.sides.remove(side) }
@@ -85,7 +75,7 @@ final class PulseSettings: ObservableObject {
         guard enabled else { return "The screen pulses with the beat" }
         var parts = [look.title]
         if look == .edges, sides != .all {
-            parts.append(PulseSides.named.filter { sides.contains($0.side) }.map(\.title).joined(separator: ", "))
+            parts.append(ScreenSides.named.filter { sides.contains($0.side) }.map(\.title).joined(separator: ", "))
         }
         if look != .brightness { parts.append(colorMode.title) }
         parts.append("\(Int((strength * 100).rounded()))%")
@@ -100,13 +90,13 @@ final class PulseSettings: ObservableObject {
     private init() {
         defaults.register(defaults: [
             Key.enabled: false, Key.look: PulseLook.edges.rawValue, Key.color: PulseColorMode.barbeat.rawValue,
-            Key.strength: 0.5, Key.sides: PulseSides.all.rawValue,
+            Key.strength: 0.5, Key.sides: ScreenSides.all.rawValue,
         ])
         enabled = defaults.bool(forKey: Key.enabled)
         look = PulseLook(rawValue: defaults.string(forKey: Key.look) ?? "") ?? .edges
         colorMode = PulseColorMode(rawValue: defaults.string(forKey: Key.color) ?? "") ?? .barbeat
         strength = min(1, max(0.1, defaults.double(forKey: Key.strength)))
-        let savedSides = PulseSides(rawValue: defaults.integer(forKey: Key.sides)).intersection(.all)
+        let savedSides = ScreenSides(rawValue: defaults.integer(forKey: Key.sides)).intersection(.all)
         sides = savedSides.isEmpty ? .all : savedSides
     }
 }
@@ -120,7 +110,7 @@ enum PulseArt {
     static let depth: CGFloat = 0.16
 
     /// The glow's strength at each pixel of a `width` x `height` picture of the screen, 0...255, top row first.
-    static func edgeAlpha(width: Int, height: Int, sides: PulseSides = .all) -> [UInt8] {
+    static func edgeAlpha(width: Int, height: Int, sides: ScreenSides = .all) -> [UInt8] {
         var alpha = [UInt8](repeating: 0, count: width * height)
         guard !sides.isEmpty else { return alpha }
         let k: CGFloat = 0.02   // corner rounding
@@ -145,7 +135,7 @@ enum PulseArt {
     }
 
     /// The glow's shape as a layer mask: white, with the glow's strength as its alpha.
-    static func edgeMask(aspect: CGFloat, sides: PulseSides) -> CGImage? {
+    static func edgeMask(aspect: CGFloat, sides: ScreenSides) -> CGImage? {
         let height = 160, width = max(16, min(1024, Int((CGFloat(height) * aspect).rounded())))
         let alpha = edgeAlpha(width: width, height: height, sides: sides)
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -191,7 +181,7 @@ enum PulseArt {
 private final class PulseView: NSView {
     private let colorLayer = CALayer()
     private let maskLayer = CALayer()
-    private var maskKey: (aspect: CGFloat, sides: PulseSides)?
+    private var maskKey: (aspect: CGFloat, sides: ScreenSides)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -214,7 +204,7 @@ private final class PulseView: NSView {
         CATransaction.commit()
     }
 
-    func show(look: PulseLook, sides: PulseSides, color: RGB, opacity: Float) {
+    func show(look: PulseLook, sides: ScreenSides, color: RGB, opacity: Float) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if colorLayer.frame != bounds {
@@ -520,7 +510,7 @@ struct PulsePage: View {
                 if settings.look == .edges {
                     SettingsSection("Sides", caption: "The edges that glow. At least one stays on.") {
                         HStack(spacing: 16) {
-                            ForEach(PulseSides.named, id: \.title) { item in
+                            ForEach(ScreenSides.named, id: \.title) { item in
                                 Toggle(item.title, isOn: settings.side(item.side))
                                     .toggleStyle(.checkbox)
                                     .disabled(settings.sides == item.side)

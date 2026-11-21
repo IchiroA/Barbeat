@@ -68,6 +68,8 @@ struct SceneLook: Codable, Equatable {
     // Brightness and glow
     var brightness: Double?, opacity: Double?, readableMenuBar: Bool?
     var edgeGlow: Bool?, edgeGlowDepth: Double?, edgeGlowTop: Bool?
+    /// The edge glow's sides (`ScreenSides` raw value). Scenes saved before 2.1 only have `edgeGlowTop`.
+    var edgeGlowSides: Int?
     var allDisplays: Bool?, showInFullScreen: Bool?, fullScreenStrip: Bool?
     // Listen to
     var audioSource: String?, sourceAppID: String?, sourceAppName: String?, sourceDeviceUID: String?
@@ -96,6 +98,7 @@ struct SceneLook: Codable, Equatable {
         screenBeamStrength = v(.screenBeamStrength); screenBeamsToLights = v(.screenBeamsToLights)
         brightness = v(.brightness); opacity = v(.opacity); readableMenuBar = v(.readableMenuBar)
         edgeGlow = v(.edgeGlow); edgeGlowDepth = v(.edgeGlowDepth); edgeGlowTop = v(.edgeGlowTop)
+        edgeGlowSides = v(.edgeGlowSides)
         allDisplays = v(.allDisplays); showInFullScreen = v(.showInFullScreen); fullScreenStrip = v(.fullScreenStrip)
         audioSource = v(.audioSource); sourceAppID = v(.sourceAppID); sourceAppName = v(.sourceAppName)
         sourceDeviceUID = v(.sourceDeviceUID); sourceDeviceName = v(.sourceDeviceName)
@@ -136,6 +139,7 @@ struct SceneLook: Codable, Equatable {
         look.edgeGlow = s.edgeGlow
         look.edgeGlowDepth = s.edgeGlowDepth
         look.edgeGlowTop = s.edgeGlowTop
+        look.edgeGlowSides = s.edgeGlowSides.rawValue
         look.allDisplays = s.allDisplays
         look.showInFullScreen = s.showInFullScreen
         look.fullScreenStrip = s.fullScreenStrip
@@ -199,6 +203,7 @@ struct SceneLook: Codable, Equatable {
         c.brightness = clamp(brightness, 0.3...2)
         c.opacity = clamp(opacity, 0.15...1)
         c.edgeGlowDepth = clamp(edgeGlowDepth, Settings.edgeGlowDepthRange)
+        c.edgeGlowSides = edgeGlowSides.map { ScreenSides(rawValue: $0).intersection(.all).rawValue }.flatMap { $0 == 0 ? nil : $0 }
         c.sensitivity = clamp(sensitivity, -12...12)
         c.lowGain = clamp(lowGain, -12...12)
         c.midGain = clamp(midGain, -12...12)
@@ -237,7 +242,11 @@ struct SceneLook: Codable, Equatable {
         put(opacity, s, \.opacity)
         put(readableMenuBar, s, \.readableMenuBar)
         put(edgeGlowDepth, s, \.edgeGlowDepth)
-        put(edgeGlowTop, s, \.edgeGlowTop)
+        if let edgeGlowSides {
+            put(ScreenSides(rawValue: edgeGlowSides), s, \.edgeGlowSides)
+        } else {
+            put(edgeGlowTop, s, \.edgeGlowTop)
+        }
         put(edgeGlow, s, \.edgeGlow)
         put(allDisplays, s, \.allDisplays)
         put(fullScreenStrip, s, \.fullScreenStrip)
@@ -314,6 +323,7 @@ struct SceneLook: Codable, Equatable {
         case .glow:
             brightness = o.brightness; opacity = o.opacity; readableMenuBar = o.readableMenuBar
             edgeGlow = o.edgeGlow; edgeGlowDepth = o.edgeGlowDepth; edgeGlowTop = o.edgeGlowTop
+            edgeGlowSides = o.edgeGlowSides
             allDisplays = o.allDisplays; showInFullScreen = o.showInFullScreen; fullScreenStrip = o.fullScreenStrip
         case .source:
             audioSource = o.audioSource; sourceAppID = o.sourceAppID; sourceAppName = o.sourceAppName
@@ -393,6 +403,11 @@ struct SceneLook: Codable, Equatable {
         if let brightness { parts.append("\(Int((brightness * 100).rounded()))% bright") }
         if edgeGlow == false { parts.append("no edge glow") } else if edgeGlow == true, let edgeGlowDepth {
             parts.append("\(Int(edgeGlowDepth.rounded())) pt glow")
+            if let edgeGlowSides, ScreenSides(rawValue: edgeGlowSides) != .all {
+                let sides = ScreenSides(rawValue: edgeGlowSides)
+                parts.append("on " + ScreenSides.named.filter { sides.contains($0.side) }.map { $0.title.lowercased() }
+                    .joined(separator: ", "))
+            }
         }
         if let kind = audioSource.flatMap(AudioSourceKind.init(rawValue:)) {
             switch kind {
@@ -566,7 +581,7 @@ final class SceneStore: ObservableObject {
         look.screenColors = true; look.screenColorMode = ScreenColorMode.ambient.rawValue; look.screenBeams = true
         look.screenBeamStrength = 1.06; look.screenBeamsToLights = true
         look.brightness = 2; look.opacity = 0.8; look.readableMenuBar = true
-        look.edgeGlow = true; look.edgeGlowDepth = 241; look.edgeGlowTop = true
+        look.edgeGlow = true; look.edgeGlowDepth = 241; look.edgeGlowTop = true; look.edgeGlowSides = ScreenSides.all.rawValue
         look.allDisplays = true; look.showInFullScreen = true; look.fullScreenStrip = false
         look.sensitivity = -2; look.autoLevel = true; look.lowGain = -4; look.midGain = -2; look.highGain = 0
         look.lights = true; look.lightMode = LightMode.auto.rawValue; look.baseGlow = 0.12; look.beatFlash = 0.79

@@ -1,6 +1,93 @@
 import AppKit
 import Metal
 import QuartzCore
+import os
+
+private let renderLog = Logger(subsystem: "com.ia.MenuBarEQ", category: "render")
+
+/// Gets a Metal layer's next drawable ahead of time on a background queue, so the main thread never waits for one.
+/// A layer has three drawables, and macOS hands them back only once newer frames show; while it switches desktops
+/// it holds on to them, and asking for one then waits up to a second. With this, that window just skips frames
+/// until a drawable comes back; everything else keeps running.
+final class DrawableSource {
+    private let queue: DispatchQueue
+    private let lock = NSLock()
+    private var ready: CAMetalDrawable?
+    private var fetching = false
+    /// A frame was wanted while none was ready: draw again once one is.
+    private var wanted = false
+    private let name: String
+    /// `--verbose`: frames drawn and skipped, printed every 5 seconds.
+    private let verbose = CommandLine.arguments.contains("--verbose")
+    private var drawn = 0, skipped = 0, lastReport: CFTimeInterval = 0
+    /// Called on the main thread when a drawable is ready after a frame had to be skipped.
+    var onReady: (() -> Void)?
+
+    init(name: String) {
+        self.name = name
+        queue = DispatchQueue(label: "com.ia.Barbeat.drawables.\(name)", qos: .userInteractive)
+    }
+
+    /// The drawable got ahead of time, if one is ready and still the layer's size. Nil means: skip this frame
+    /// (it's drawn as soon as a drawable comes).
+    func take(for layer: CAMetalLayer) -> CAMetalDrawable? {
+        lock.lock()
+        let drawable = ready
+        ready = nil
+        if drawable == nil { wanted = true }
+        lock.unlock()
+        if verbose { report() }
+        guard let drawable else {
+            skipped += 1
+            fetch(for: layer)
+            return nil
+        }
+        let size = layer.drawableSize
+        guard drawable.texture.width == Int(size.width), drawable.texture.height == Int(size.height) else {
+            // From before a size change: let it go and get one of the new size.
+            lock.lock(); wanted = true; lock.unlock()
+            fetch(for: layer)
+            return nil
+        }
+        drawn += 1
+        return drawable
+    }
+
+    private func report() {
+        let now = CACurrentMediaTime()
+        if lastReport == 0 { lastReport = now }
+        guard now - lastReport >= 5 else { return }
+        print(String(format: "render: %@: %d frames drawn, %d skipped in %.0f s", name, drawn, skipped, now - lastReport))
+        drawn = 0; skipped = 0; lastReport = now
+    }
+
+    /// Starts getting the next drawable (call after handing a frame to the screen).
+    func fetch(for layer: CAMetalLayer) {
+        guard layer.drawableSize.width > 0, layer.drawableSize.height > 0 else { return }
+        lock.lock()
+        guard !fetching, ready == nil else { lock.unlock(); return }
+        fetching = true
+        lock.unlock()
+        queue.async { [self] in
+            let asked = CACurrentMediaTime()
+            let drawable = layer.nextDrawable()
+            let waited = CACurrentMediaTime() - asked
+            lock.lock()
+            ready = drawable
+            fetching = false
+            let redraw = wanted && drawable != nil
+            if redraw { wanted = false }
+            lock.unlock()
+            if waited > 0.2 {
+                renderLog.notice("\(self.name, privacy: .public): the screen held its frames for \(waited, format: .fixed(precision: 2), privacy: .public) s")
+                if CommandLine.arguments.contains("--verbose") {
+                    print(String(format: "render: %@: the screen held its frames for %.2f s", name, waited))
+                }
+            }
+            if redraw { DispatchQueue.main.async { [weak self] in self?.onReady?() } }
+        }
+    }
+}
 
 /// Compiles the shader once and holds the GPU objects every overlay shares.
 final class MetalRenderer {
@@ -43,7 +130,15 @@ final class EQView: NSView {
     var notch: ClosedRange<CGFloat>?
     /// Edge glow: the length of each side's run of bands in points (side window plus top corner); 0 = own height.
     var edgeRun: CGFloat = 0
+    /// Edge glow: the sides that glow, so the bottom and top windows only draw the corners of sides that are on.
+    var edgeSides: ScreenSides = .all
     private let settings: Settings
+    /// This window's next drawable, got ahead of time off the main thread.
+    private lazy var drawables: DrawableSource = {
+        let source = DrawableSource(name: "window \(edge)")
+        source.onReady = { [weak self] in self?.render() }
+        return source
+    }()
     private var params = [Float](repeating: 0, count: ShaderParam.count)
     private var bands = [Float](repeating: 0, count: ShaderParam.bandBufferCount)
     private var particles = [SIMD4<Float>](repeating: .zero, count: SparkSystem.maxParticles * 2)
@@ -120,12 +215,12 @@ final class EQView: NSView {
 
     /// Draws one frame. Called by the render loop and whenever settings change.
     func render() {
-        guard let renderer = MetalRenderer.shared, let metalLayer, prepareFrame(),
-              metalLayer.drawableSize.width > 0, let drawable = metalLayer.nextDrawable(),
-              let commands = renderer.queue.makeCommandBuffer() else { return }
+        guard let renderer = MetalRenderer.shared, let metalLayer, metalLayer.drawableSize.width > 0, prepareFrame(),
+              let drawable = drawables.take(for: metalLayer), let commands = renderer.queue.makeCommandBuffer() else { return }
         encode(into: drawable.texture, commands: commands, renderer: renderer)
         commands.present(drawable)
         commands.commit()
+        drawables.fetch(for: metalLayer)
     }
 
     /// Renders the current frame offscreen and returns it as an image (for `--snapshot`).
@@ -206,6 +301,7 @@ final class EQView: NSView {
         set(ShaderParam.edgeMode, CGFloat(edge))
         set(ShaderParam.edgeThickness, edge >= 3 ? height : min(width, height))
         set(ShaderParam.edgeRun, edgeRun)
+        set(ShaderParam.edgeSides, CGFloat(edgeSides.rawValue))
         set(ShaderParam.textGuard, edge == 0 && settings.readableMenuBar ? (MenuBarText.isLight ? 1 : 2) : 0)
         set(ShaderParam.edgeBands, CGFloat(min(analyzer.left.count, ShaderParam.maxBands)))
         set(ShaderParam.barColumns, barColumns)

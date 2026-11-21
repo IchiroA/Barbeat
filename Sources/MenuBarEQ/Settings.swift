@@ -1,6 +1,16 @@
 import Foundation
 import Combine
 
+/// Edges of the screen: which ones the edge glow runs along, and which ones the beat pulse's "Glow from the edges" lights.
+struct ScreenSides: OptionSet, Equatable, Hashable {
+    let rawValue: Int
+    static let left = ScreenSides(rawValue: 1), right = ScreenSides(rawValue: 2)
+    static let top = ScreenSides(rawValue: 4), bottom = ScreenSides(rawValue: 8)
+    static let all: ScreenSides = [.left, .right, .top, .bottom]
+    /// In the order the Settings pages list them.
+    static let named: [(side: ScreenSides, title: String)] = [(.left, "Left"), (.top, "Top"), (.right, "Right"), (.bottom, "Bottom")]
+}
+
 enum EQStyle: String, CaseIterable, Identifiable {
     case led, bars, center, glow, pulse, vu, aura, waterfall, scope, sparks
     var id: String { rawValue }
@@ -106,12 +116,23 @@ final class Settings: ObservableObject {
     @Published var autoLevel: Bool { didSet { defaults.set(autoLevel, forKey: Key.autoLevel) } }
     @Published var showPeaks: Bool { didSet { defaults.set(showPeaks, forKey: Key.showPeaks) } }
     @Published var allDisplays: Bool { didSet { defaults.set(allDisplays, forKey: Key.allDisplays) } }
-    /// Ambient glow along the left, right and bottom edges of the screen (and the top, with `edgeGlowTop`).
+    /// Ambient glow along the edges of the screen chosen in `edgeGlowSides`.
     @Published var edgeGlow: Bool { didSet { defaults.set(edgeGlow, forKey: Key.edgeGlow) } }
     /// How far the edge glow reaches into the screen, in points (see `edgeGlowDepthRange`).
     @Published var edgeGlowDepth: Double { didSet { defaults.set(edgeGlowDepth, forKey: Key.edgeGlowDepth) } }
-    /// The edge glow also runs along the top of the screen, just below the menu bar.
-    @Published var edgeGlowTop: Bool { didSet { defaults.set(edgeGlowTop, forKey: Key.edgeGlowTop) } }
+    /// The edges the glow runs along (at least one). The top one sits just below the menu bar.
+    @Published var edgeGlowSides: ScreenSides {
+        didSet {
+            defaults.set(edgeGlowSides.rawValue, forKey: Key.edgeGlowSides)
+            // Also the old top-only switch, so an older Barbeat opened later still finds it.
+            defaults.set(edgeGlowSides.contains(.top), forKey: Key.edgeGlowTop)
+        }
+    }
+    /// The edge glow also runs along the top of the screen (what scenes saved before the sides could be chosen hold).
+    var edgeGlowTop: Bool {
+        get { edgeGlowSides.contains(.top) }
+        set { if newValue { edgeGlowSides.insert(.top) } else if edgeGlowSides != .top { edgeGlowSides.remove(.top) } }
+    }
     /// Intensity of the glows and colors, 0.3...2.
     @Published var brightness: Double { didSet { defaults.set(brightness, forKey: Key.brightness) } }
     /// Extra gain for the low / mid / high frequencies in dB, -12...+12.
@@ -182,7 +203,7 @@ final class Settings: ObservableObject {
         static let screenColors = "screenColors"
         static let opacity = "opacity", sensitivity = "sensitivity", autoLevel = "autoLevel"
         static let showPeaks = "showPeaks", allDisplays = "allDisplays", edgeGlow = "edgeGlow"
-        static let edgeGlowDepth = "edgeGlowDepth", edgeGlowTop = "edgeGlowTop"
+        static let edgeGlowDepth = "edgeGlowDepth", edgeGlowTop = "edgeGlowTop", edgeGlowSides = "edgeGlowSides"
         static let brightness = "brightness", lowGain = "lowGain", midGain = "midGain", highGain = "highGain"
         static let sparkPower = "sparkPower"
         static let customGradient = "customGradient", savedGradients = "savedGradients", colorDrift = "colorDrift"
@@ -276,7 +297,14 @@ final class Settings: ObservableObject {
         edgeGlow = defaults.bool(forKey: Key.edgeGlow)
         let range = Settings.edgeGlowDepthRange
         edgeGlowDepth = min(max(defaults.double(forKey: Key.edgeGlowDepth), range.lowerBound), range.upperBound)
-        edgeGlowTop = defaults.bool(forKey: Key.edgeGlowTop)
+        // No sides saved yet (before 2.1): the old "Top edge too" switch decides the top; left, right and bottom were always on.
+        // (Not a registered default, so a missing value reads as nil.)
+        let savedSides = ScreenSides(rawValue: defaults.integer(forKey: Key.edgeGlowSides)).intersection(.all)
+        if defaults.object(forKey: Key.edgeGlowSides) != nil, !savedSides.isEmpty {
+            edgeGlowSides = savedSides
+        } else {
+            edgeGlowSides = defaults.bool(forKey: Key.edgeGlowTop) ? .all : [.left, .right, .bottom]
+        }
         brightness = defaults.double(forKey: Key.brightness)
         lowGain = defaults.double(forKey: Key.lowGain)
         midGain = defaults.double(forKey: Key.midGain)

@@ -401,8 +401,17 @@ private struct GlowPage: View {
                 if settings.edgeGlow {
                     SettingsSlider("Depth", value: $settings.edgeGlowDepth, in: Settings.edgeGlowDepthRange,
                                    text: "\(Int(settings.edgeGlowDepth.rounded())) pt")
-                    Toggle("Top edge too, below the menu bar", isOn: $settings.edgeGlowTop)
-                        .toggleStyle(.checkbox)
+                    HStack(spacing: 10) {
+                        Text("Sides").frame(width: 110, alignment: .leading)
+                        HStack(spacing: 16) {
+                            ForEach(ScreenSides.named, id: \.title) { item in
+                                Toggle(item.title, isOn: side(item.side))
+                                    .toggleStyle(.checkbox)
+                                    .disabled(settings.edgeGlowSides == item.side)
+                            }
+                        }
+                    }
+                    .help("The edges that glow. The top one sits just below the menu bar. At least one stays on.")
                 }
             }
             SettingsSection("Where it shows") {
@@ -417,6 +426,14 @@ private struct GlowPage: View {
             }
             .toggleStyle(.checkbox)
         }
+    }
+
+    /// A switch for one edge of the glow; the last edge that's on can't be switched off.
+    private func side(_ side: ScreenSides) -> Binding<Bool> {
+        Binding(get: { settings.edgeGlowSides.contains(side) },
+                set: { on in
+                    if on { settings.edgeGlowSides.insert(side) } else if settings.edgeGlowSides != side { settings.edgeGlowSides.remove(side) }
+                })
     }
 }
 

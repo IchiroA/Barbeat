@@ -5,11 +5,17 @@ import Metal
 import MetalKit
 import CoreVideo
 import ScreenCaptureKit
+import os
 
 // The kaleidoscope: a show mode that turns the screen into a kaleidoscope moving with the music. It captures the
-// screen the pointer is on (everything but itself, so Barbeat's own visuals spin along), mirrors it into wedges on
-// the GPU and draws that over the whole screen under the menu bar. Click anywhere or press Esc to stop.
+// screen the pointer is on below the menu bar (everything but itself, so Barbeat's edge glow spins along), mirrors
+// it into wedges on the GPU and draws that over the whole screen, menu bar included. Pointing at the top of the
+// screen brings the menu bar back, as in a full-screen app. It stays on the desktop it started on (and rests while
+// another one shows). Click anywhere or press Esc to stop.
 // Its options are saved (`kaleidoscope.*`); whether it's running is not, so it never starts by itself.
+
+/// What the kaleidoscope did, in the system log (Console, or `log show --predicate 'subsystem == "com.ia.MenuBarEQ"'`).
+private let kaleidoscopeLog = Logger(subsystem: "com.ia.MenuBarEQ", category: "kaleidoscope")
 
 /// The kaleidoscope's patterns.
 enum KaleidoscopePattern: String, CaseIterable, Identifiable {
@@ -229,7 +235,8 @@ final class KaleidoscopeRenderer {
         // A soft vignette keeps the eye in the middle.
         float2 corner = in.uv - 0.5;
         c *= 1.0 - 0.45 * smoothstep(0.35, 0.75, length(corner * float2(1.0, 1.0)));
-        return float4(saturate(c) * p.fade, 1.0);
+        // Premultiplied: fading in and out shows the screen underneath.
+        return float4(saturate(c) * p.fade, p.fade);
     }
     """
 
@@ -279,7 +286,19 @@ final class KaleidoscopeRenderer {
     }
 
     var hasPicture: Bool { picture != nil }
+    /// Drops the last show's picture, so a new show doesn't start with it.
+    func forget() { picture = nil }
     var pictureAspect: Float { picture.map { Float($0.width) / Float(max(1, $0.height)) } ?? 1.6 }
+
+    /// Nothing (the screen shows through), until the first screen frame comes in.
+    func clear(_ target: MTLTexture, commands: MTLCommandBuffer) {
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = target
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        pass.colorAttachments[0].storeAction = .store
+        commands.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
+    }
 
     func encode(into target: MTLTexture, params: Params, extras: Extras, commands: MTLCommandBuffer) {
         guard let picture else { return }
@@ -359,7 +378,11 @@ private final class KaleidoscopeView: NSView {
         let layer = CAMetalLayer()
         layer.device = KaleidoscopeRenderer.shared?.device
         layer.pixelFormat = .bgra8Unorm
-        layer.isOpaque = true
+        // Not opaque, to macOS: an app whose windows are all covered by an opaque window is told it's hidden, and
+        // browsers then stop drawing video, which would freeze what the show (and Screen colors) sees. Every pixel
+        // is drawn at full strength anyway, except while fading in and out.
+        layer.isOpaque = false
+        layer.backgroundColor = CGColor(gray: 0, alpha: 0)
         layer.framebufferOnly = true
         layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         layer.maximumDrawableCount = 3
@@ -367,6 +390,9 @@ private final class KaleidoscopeView: NSView {
     }
 
     var metalLayer: CAMetalLayer? { layer as? CAMetalLayer }
+
+    /// A click stops the show even when the window isn't the key one (after switching desktops, say).
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
@@ -382,7 +408,7 @@ private final class KaleidoscopeView: NSView {
     }
 }
 
-/// Covers one screen under the menu bar. Takes clicks and keys (so a click or Esc can stop the show).
+/// Covers one whole screen, menu bar included. Takes clicks and keys (so a click or Esc can stop the show).
 private final class KaleidoscopeWindow: NSPanel {
     let view = KaleidoscopeView(frame: .zero)
     var onStop: (() -> Void)?
@@ -391,18 +417,33 @@ private final class KaleidoscopeWindow: NSPanel {
 
     init(screen: NSScreen) {
         super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        isOpaque = true
-        backgroundColor = .black
+        isOpaque = false   // see KaleidoscopeView.makeBackingLayer
+        backgroundColor = .clear
         hasShadow = false
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         animationBehavior = .none
-        // Above apps, the Dock and Barbeat's other windows; under the menu bar, so the panel stays in reach.
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 2)
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        level = Self.coverLevel
+        // Lives on the desktop it opens on (also one with an app in full screen), and slides away with it.
+        collectionBehavior = [.managed, .ignoresCycle, .fullScreenAuxiliary]
         contentView = view
         setFrame(screen.frame, display: false)
     }
+
+    /// Above apps, the Dock, the menu bar and all of Barbeat's other windows (menus still open over it).
+    private static let coverLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+    /// While the menu bar is in use: under it, still above apps, the Dock and Barbeat's edge glow.
+    private static let underMenuBarLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 2)
+
+    /// The pointer is at the top of the screen (or a menu is open): the menu bar shows over the kaleidoscope.
+    var menuBarShowing = false {
+        didSet {
+            guard menuBarShowing != oldValue else { return }
+            level = menuBarShowing ? Self.underMenuBarLevel : Self.coverLevel
+        }
+    }
+    /// When the menu bar stops counting as in use (CACurrentMediaTime), after the pointer leaves it.
+    var menuBarShowingUntil: CFTimeInterval = 0
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -434,9 +475,10 @@ private final class KaleidoscopeCapture: NSObject, SCStreamOutput, SCStreamDeleg
         return newest
     }
 
-    /// Captures `display` without `window` (the kaleidoscope itself), at half the screen's pixels.
+    /// Captures `display` without `window` (the kaleidoscope itself) and without the top `topBand` points (the menu
+    /// bar, or the band where it would be), at half the screen's pixels.
     /// The window only shows up in macOS's list a moment after it opens, so this asks a few times.
-    func start(display: CGDirectDisplayID, without window: CGWindowID, frameRate: Int, attempt: Int = 0) {
+    func start(display: CGDirectDisplayID, without window: CGWindowID, topBand: CGFloat, frameRate: Int, attempt: Int = 0) {
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [weak self] content, error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -448,7 +490,8 @@ private final class KaleidoscopeCapture: NSObject, SCStreamOutput, SCStreamDeleg
                 let mine = content.windows.first(where: { $0.windowID == window })
                 if mine == nil, attempt < 5 {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.start(display: display, without: window, frameRate: frameRate, attempt: attempt + 1)
+                        self.start(display: display, without: window, topBand: topBand, frameRate: frameRate,
+                                   attempt: attempt + 1)
                     }
                     return
                 }
@@ -464,8 +507,12 @@ private final class KaleidoscopeCapture: NSObject, SCStreamOutput, SCStreamDeleg
                 }
                 let config = SCStreamConfiguration()
                 let scale = NSScreen.screens.first { $0.displayID == display }?.backingScaleFactor ?? 1
-                config.width = max(64, Int(CGFloat(scDisplay.width) * scale / 2))
-                config.height = max(64, Int(CGFloat(scDisplay.height) * scale / 2))
+                // The menu bar stays out of the picture (in display points, measured from the top).
+                let band = min(max(0, topBand), CGFloat(scDisplay.height) / 4)
+                let source = CGRect(x: 0, y: band, width: CGFloat(scDisplay.width), height: CGFloat(scDisplay.height) - band)
+                config.sourceRect = source
+                config.width = max(64, Int(source.width * scale / 2))
+                config.height = max(64, Int(source.height * scale / 2))
                 config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
                 config.pixelFormat = kCVPixelFormatType_32BGRA
                 config.colorSpaceName = CGColorSpace.sRGB
@@ -501,11 +548,75 @@ private final class KaleidoscopeCapture: NSObject, SCStreamOutput, SCStreamDeleg
                 as? [[SCStreamFrameInfo: Any]],
               let raw = info.first?[.status] as? Int, SCFrameStatus(rawValue: raw) == .complete,
               let pixels = sampleBuffer.imageBuffer else { return }
-        lock.lock(); newest = pixels; lock.unlock()
+        lock.lock(); let first = newest == nil; newest = pixels; lock.unlock()
+        if first, CommandLine.arguments.contains("--verbose") {
+            print("kaleidoscope: first screen frame \(CVPixelBufferGetWidth(pixels))x\(CVPixelBufferGetHeight(pixels))")
+        }
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         DispatchQueue.main.async { [weak self] in self?.onStop?(error) }
+    }
+}
+
+// MARK: - Drawing off the main thread
+
+/// Draws the kaleidoscope on its own queue. Waiting for the screen to take a frame can stall (for up to a second
+/// while macOS switches desktops), and that must never hold up the rest of Barbeat: while a frame is still being
+/// drawn (or waiting for a drawable), the next one is skipped.
+private final class KaleidoscopeDrawer {
+    private let queue = DispatchQueue(label: "com.ia.Barbeat.kaleidoscope.draw", qos: .userInteractive)
+    private let lock = NSLock()
+    private var busy = false
+    /// The last screen frame handed to the renderer (only touched on `queue`).
+    private var takenFrame: CVPixelBuffer?
+    /// Called on the main thread when the screen kept a frame waiting (seconds waited).
+    var onStall: ((Double) -> Void)?
+
+    /// Starts drawing one frame, unless the last one is still on its way. Returns false if it skipped.
+    @discardableResult
+    func draw(into layer: CAMetalLayer, pixels: CVPixelBuffer?, params: KaleidoscopeRenderer.Params,
+              extras: KaleidoscopeRenderer.Extras) -> Bool {
+        lock.lock()
+        if busy { lock.unlock(); return false }
+        busy = true
+        lock.unlock()
+        queue.async { [self] in
+            defer { lock.lock(); busy = false; lock.unlock() }
+            guard let renderer = KaleidoscopeRenderer.shared, let commands = renderer.queue.makeCommandBuffer() else { return }
+            var params = params
+            if let pixels, pixels !== takenFrame {
+                takenFrame = pixels
+                renderer.take(pixels, commands: commands)
+            }
+            params.sourceAspect = renderer.pictureAspect
+            let asked = CACurrentMediaTime()
+            let drawable = layer.nextDrawable()
+            let waited = CACurrentMediaTime() - asked
+            if waited > 0.2 {
+                DispatchQueue.main.async { [weak self] in self?.onStall?(waited) }
+            }
+            guard let drawable else {
+                commands.commit()
+                return
+            }
+            if renderer.hasPicture {
+                renderer.encode(into: drawable.texture, params: params, extras: extras, commands: commands)
+            } else {
+                renderer.clear(drawable.texture, commands: commands)
+            }
+            commands.present(drawable)
+            commands.commit()
+        }
+        return true
+    }
+
+    /// Before a new show: forget the last show's pictures.
+    func reset() {
+        queue.async { [self] in
+            takenFrame = nil
+            KaleidoscopeRenderer.shared?.forget()
+        }
     }
 }
 
@@ -524,18 +635,33 @@ final class KaleidoscopeController: ObservableObject {
     private let settings = KaleidoscopeSettings.shared
     private var window: KaleidoscopeWindow?
     private var capture: KaleidoscopeCapture?
+    private let drawer = KaleidoscopeDrawer()
     private let beat = BeatPulse()
     private var params = KaleidoscopeRenderer.Params()
     private var clock: Double = 0
     private var silence: Double = .infinity
     private var stopping = false
-    private var takenFrame: CVPixelBuffer?
     private var extras = KaleidoscopeRenderer.Extras()
     private let verbose = CommandLine.arguments.contains("--verbose")
     private var lastLog: Double = 0
     private var frames = 0
+    private var skipped = 0
+    /// The display the show is on, and how tall its menu bar (or the band where it would be) is, in points.
+    private var displayID: CGDirectDisplayID = 0
+    private var topBand: CGFloat = 0
+    /// When the screen capture last broke (it's restarted a few times before the show gives up).
+    private var captureFailures: [CFTimeInterval] = []
+    private var lastMenuCheck: CFTimeInterval = 0
+    private var spaceObserver: NSObjectProtocol?
+    /// Whether the show's desktop is the one showing. On another one it rests: no capture, no drawing.
+    private var onItsDesktop = true
+    private var lastDesktopCheck: CFTimeInterval = 0
     /// Set by the render loop: on battery the screen is captured at 30 frames a second instead of 60.
     var onBattery = false
+
+    private init() {
+        drawer.onStall = { [weak self] waited in self?.stalled(waited: waited) }
+    }
 
     /// Starts the show on the screen the pointer is on. Asks for Screen Recording first if needed.
     func start() {
@@ -567,32 +693,35 @@ final class KaleidoscopeController: ObservableObject {
         // Close the menu bar panel if it's open, so the click that closes it doesn't stop the show.
         NSApp.windows.filter { $0.isVisible && $0.className.contains("MenuBarExtra") }.forEach { $0.orderOut(nil) }
 
-        let window = KaleidoscopeWindow(screen: screen)
-        window.onStop = { [weak self] in self?.stop() }
-        self.window = window
+        displayID = screen.displayID
+        // The menu bar's height here; without one (it hides itself, or an app is in full screen) the band around the
+        // notch, and at least a standard menu bar's height, since the menu bar can still slide in.
+        topBand = max(OverlayWindow.menuBarHeight(on: screen) ?? 0, screen.safeAreaInsets.top.rounded(.up),
+                      NSStatusBar.system.thickness)
         params = KaleidoscopeRenderer.Params()
         params.aspect = Float(screen.frame.width / max(1, screen.frame.height))
         params.sourceAspect = params.aspect
         params.fade = 0
         beat.reset()
+        drawer.reset()
         clock = 0
         frames = 0
+        skipped = 0
+        captureFailures = []
         stopping = false
+        onItsDesktop = true
         NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
-
-        let capture = KaleidoscopeCapture()
-        capture.onStop = { [weak self] error in
-            guard let self, self.running, !self.stopping else { return }
-            self.problem = "The screen capture stopped: \(error.localizedDescription)"
-            self.finish()
+        openWindow(on: screen)
+        startCapture()
+        // Switching desktops: keep the show in front and the keys coming to it (another app becomes active there).
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.spaceChanged()
         }
-        self.capture = capture
-        capture.start(display: screen.displayID, without: CGWindowID(window.windowNumber), frameRate: onBattery ? 30 : 60)
         running = true
         onRunningChange?()
-        if verbose { print("kaleidoscope: started on display \(screen.displayID), \(settings.segments) mirrors") }
+        kaleidoscopeLog.notice("started on display \(self.displayID, privacy: .public), menu bar band \(Double(self.topBand), privacy: .public) pt")
+        if verbose { print("kaleidoscope: started on display \(screen.displayID), \(settings.segments) mirrors, menu bar band \(topBand) pt") }
     }
 
     /// Fades out, then closes.
@@ -601,9 +730,100 @@ final class KaleidoscopeController: ObservableObject {
         stopping = true
     }
 
+    private func openWindow(on screen: NSScreen) {
+        let window = KaleidoscopeWindow(screen: screen)
+        window.onStop = { [weak self] in self?.stop() }
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    private func startCapture() {
+        guard let window else { return }
+        capture?.stop()
+        let capture = KaleidoscopeCapture()
+        capture.onStop = { [weak self, weak capture] error in
+            guard let self, let capture, capture === self.capture else { return }
+            self.captureBroke(error)
+        }
+        self.capture = capture
+        capture.start(display: displayID, without: CGWindowID(window.windowNumber), topBand: topBand,
+                      frameRate: onBattery ? 30 : 60)
+    }
+
+    /// The screen capture stopped by itself: start it again, unless it keeps breaking.
+    private func captureBroke(_ error: Error) {
+        guard running, !stopping, onItsDesktop else { return }
+        let now = CACurrentMediaTime()
+        captureFailures = captureFailures.filter { now - $0 < 10 } + [now]
+        kaleidoscopeLog.error("screen capture stopped (\(self.captureFailures.count, privacy: .public) in 10 s): \(error.localizedDescription, privacy: .public)")
+        if verbose { print("kaleidoscope: screen capture stopped: \(error.localizedDescription)") }
+        guard captureFailures.count <= 3 else {
+            problem = "The screen capture stopped: \(error.localizedDescription)"
+            finish()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.running, !self.stopping, self.onItsDesktop else { return }
+            self.startCapture()
+        }
+    }
+
+    /// Another desktop: the show stays on its own one. While another shows, it rests (no capture, no drawing);
+    /// back on its desktop it captures again and takes the keys (Esc). Barbeat isn't made the active app here,
+    /// which could pull you to another desktop.
+    private func spaceChanged() {
+        guard running, let window else { return }
+        lastDesktopCheck = CACurrentMediaTime()
+        let here = window.isOnActiveSpace
+        guard here != onItsDesktop else { return }
+        onItsDesktop = here
+        kaleidoscopeLog.notice("\(here ? "back on its desktop" : "another desktop: resting", privacy: .public)")
+        if verbose { print("kaleidoscope: \(here ? "back on its desktop" : "another desktop: resting")") }
+        if here {
+            startCapture()
+            window.makeKey()
+        } else {
+            capture?.stop()
+            capture = nil
+        }
+    }
+
+    /// The screen kept a frame waiting: macOS holds the frames while it switches desktops. The show skips frames
+    /// meanwhile and carries on by itself; this only notes it.
+    private func stalled(waited: Double) {
+        guard running else { return }
+        kaleidoscopeLog.notice("the screen held its frames for \(waited, format: .fixed(precision: 2), privacy: .public) s")
+        if verbose { print(String(format: "kaleidoscope: the screen held its frames for %.2f s", waited)) }
+    }
+
+    /// Like a full-screen app: pointing at the top of the screen brings the menu bar back; it goes again once the
+    /// pointer leaves it and no menu is open.
+    private func updateMenuBar(_ window: KaleidoscopeWindow, now: CFTimeInterval) {
+        let pointer = NSEvent.mouseLocation, f = window.frame
+        let inBar = pointer.x >= f.minX && pointer.x <= f.maxX && pointer.y <= f.maxY + 1 && pointer.y >= f.maxY - topBand - 2
+        if inBar && (window.menuBarShowing || pointer.y >= f.maxY - 2) {
+            window.menuBarShowingUntil = now + 0.6
+        } else if now < window.menuBarShowingUntil, now - lastMenuCheck > 0.25 {
+            // Still showing: keep it while a menu or Barbeat's panel is open (looked up a few times a second).
+            lastMenuCheck = now
+            let panelOpen = NSApp.windows.contains { $0.isVisible && $0.className.contains("MenuBarExtra") }
+            if panelOpen || OverlayWindow.otherAppMenuIsOpen() { window.menuBarShowingUntil = now + 0.5 }
+        }
+        window.menuBarShowing = now < window.menuBarShowingUntil
+    }
+
     /// Every frame from the render loop: moves the pattern with the music and draws it.
     func tick(analyzer: SpectrumAnalyzer, sound: Float, colors: FrameColors, tempo: BeatTracker, dt: Double) {
-        guard running, let window, let renderer = KaleidoscopeRenderer.shared else { return }
+        guard running, let window, KaleidoscopeRenderer.shared != nil else { return }
+        // Now and then, look whether its desktop is showing (in case a desktop switch went unannounced).
+        let now = CACurrentMediaTime()
+        if now - lastDesktopCheck > 1 { spaceChanged() }
+        guard onItsDesktop else {
+            // Stopped from another desktop: nothing to fade, it isn't showing.
+            if stopping { finish() }
+            return
+        }
         clock += dt
         silence = sound > 0.0005 ? 0 : silence + dt
         let playing = silence < 1.2
@@ -619,6 +839,7 @@ final class KaleidoscopeController: ObservableObject {
             finish()
             return
         }
+        updateMenuBar(window, now: CACurrentMediaTime())
         // Turning: with a steady tempo, one wedge every bar (four beats) at the middle setting, a bit faster when
         // the music is loud; without one, a slow drift that speeds up with the music.
         let spin = Float(settings.spin) * (reduceMotion ? 0.3 : 1)
@@ -664,24 +885,17 @@ final class KaleidoscopeController: ObservableObject {
             extras.bands[i] = old + (level - old) * (level > old ? 0.6 : 0.15)
         }
 
-        guard let metalLayer = window.view.metalLayer, let commands = renderer.queue.makeCommandBuffer() else { return }
-        if let pixels = capture?.latest, pixels !== takenFrame {
-            takenFrame = pixels
-            renderer.take(pixels, commands: commands)
-            params.sourceAspect = renderer.pictureAspect
+        guard let metalLayer = window.view.metalLayer else { return }
+        if drawer.draw(into: metalLayer, pixels: capture?.latest, params: params, extras: extras) {
+            frames += 1
+        } else {
+            skipped += 1
         }
-        guard renderer.hasPicture, let drawable = metalLayer.nextDrawable() else {
-            commands.commit()
-            return
-        }
-        renderer.encode(into: drawable.texture, params: params, extras: extras, commands: commands)
-        commands.present(drawable)
-        commands.commit()
-        frames += 1
         if verbose, clock - lastLog >= 1 {
             lastLog = clock
-            print(String(format: "kaleidoscope: %d frames, %@, beat %.2f, zoom %.3f, tempo %.1f BPM (sure %.2f), beats %d",
-                         frames, settings.pattern.rawValue, value, params.zoom, tempo.bpm, tempo.confidence, beat.beats))
+            print(String(format: "kaleidoscope: %d frames (%d skipped), %@, beat %.2f, zoom %.3f, tempo %.1f BPM (sure %.2f), beats %d%@",
+                         frames, skipped, settings.pattern.rawValue, value, params.zoom, tempo.bpm, tempo.confidence, beat.beats,
+                         window.menuBarShowing ? ", menu bar showing" : ""))
         }
     }
 
@@ -691,12 +905,14 @@ final class KaleidoscopeController: ObservableObject {
         capture = nil
         window?.orderOut(nil)
         window = nil
-        takenFrame = nil
+        if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
+        spaceObserver = nil
         stopping = false
         guard running else { return }
         running = false
         onRunningChange?()
-        if verbose { print("kaleidoscope: stopped after \(frames) frames") }
+        kaleidoscopeLog.notice("stopped after \(self.frames, privacy: .public) frames (\(self.skipped, privacy: .public) skipped)")
+        if verbose { print("kaleidoscope: stopped after \(frames) frames, \(skipped) skipped") }
     }
 }
 
@@ -794,7 +1010,8 @@ struct KaleidoscopePage: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {
-                note("It shows on the screen the pointer is on and covers everything but the menu bar, so Barbeat's panel stays in reach. Barbeat's own menu bar and edge visuals are mirrored in too.")
+                note("It covers the whole screen the pointer is on, menu bar included. Point at the top of the screen to bring the menu bar back. Barbeat's edge glow is mirrored in too.")
+                note("It stays on the desktop you start it on. Other desktops look as usual, and the show picks up again when you come back.")
                 note("Barbeat needs Screen Recording (the same permission as Screen colors). Frames go straight to the graphics chip and are thrown away: nothing is recorded, saved or sent. Copy-protected video shows as black.")
                 note("With Reduce motion on it turns slowly and doesn't zoom.")
             }

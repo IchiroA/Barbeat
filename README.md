@@ -45,8 +45,8 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
   color pulses with the beat), **VU** (a stereo meter that shoots out of the notch), **Aura** (light hugging the
   notch that flares with the bass), **Waterfall** (the music's recent history flowing outward), **Scope** (a live
   waveform) and **Sparks** (particles bursting out of the notch on every beat).
-- **Screen edge glow**: an optional ambient glow along the left, right and bottom screen edges, and (**Top edge
-  too**, on by default) along the top just below the menu bar, combinable with any style. **Depth** sets how far it reaches into the screen (16–480 pt, at most a third of the screen). **Wallpaper** colors pick a palette from your desktop picture.
+- **Screen edge glow**: an optional ambient glow along the edges of the screen, combinable with any style. **Sides**
+  picks which edges glow (left, top, right, bottom; all on by default; the top one sits just below the menu bar). **Depth** sets how far it reaches into the screen (16–480 pt, at most a third of the screen). **Wallpaper** colors pick a palette from your desktop picture.
 - **Custom** colors: four color blocks with an in-panel picker (hue / saturation / brightness, quick picks, hex),
   colored by frequency or by bar height, Shuffle, From Wallpaper, and four preset slots. **Customize** copies any
   built-in palette into Custom. **Color drift** slowly turns any palette around the color wheel.
@@ -133,8 +133,18 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
   pages show the tempo it hears.
 - **Kaleidoscope** (`Kaleidoscope.swift`; Start and Options… in the panel, its own Settings page): a show mode. It
   captures the screen the pointer is on with ScreenCaptureKit (half the screen's pixels, 60 frames a second, 30 on
-  battery; everything but its own window, so Barbeat's visuals spin along), mirrors it into 6–12 wedges in a Metal
-  shader and draws that in a window over the whole screen under the menu bar (level Dock + 2). Patterns: Mirror,
+  battery; below the menu bar, and everything but its own window, so Barbeat's edge glow spins along), mirrors it
+  into 6–12 wedges in a Metal shader and draws that in a window over the whole screen, menu bar included (status bar
+  level + 1). Pointing at the top of the screen drops it under the menu bar until the pointer leaves the bar and no
+  menu is open, as in a full-screen app. The window is on the desktop it was started on (`.managed`, not on all
+  spaces); while another desktop shows it rests (capture stopped, nothing drawn) and picks up when it's back. It is
+  not opaque to macOS (an opaque window covering an app makes macOS tell the app it's hidden, and browsers then stop
+  drawing video, freezing the picture and Screen colors); it fades in and out over the screen. It draws on its own queue (a frame is skipped while the last one is still
+  waiting for the screen), so a stalled window can't hold up the app, and a capture that stops is restarted (up to 3
+  times in 10 s). The menu bar and edge glow windows get their next drawable ahead of time on a background queue
+  (`DrawableSource` in EQView.swift) for the same reason: macOS holds drawables for up to a second while it switches
+  desktops. Its events go to the system log
+  (subsystem `com.ia.MenuBarEQ`, category `kaleidoscope`). Patterns: Mirror,
   Crystal (the wedge folded four more times) and Tunnel (log-polar, flowing on the beat). Colors: Natural, Vivid or
   tinted with Barbeat's palette; a music flower (32 spectrum bands as petals in Barbeat's colors) and a glow (a
   mipmapped copy of the frame) that swells on the beat. With a steady tempo it turns one wedge per bar at the middle

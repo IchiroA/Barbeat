@@ -96,7 +96,7 @@ final class OverlayController: NSObject {
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
         settings.$edgeGlowDepth.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
-        settings.$edgeGlowTop.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+        settings.$edgeGlowSides.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
         settings.$showInFullScreen.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
@@ -337,26 +337,32 @@ final class OverlayController: NSObject {
             }
         }
 
-        // Screen-edge glow: windows along the left, right and bottom of each screen (and the top, just below the
-        // menu bar), as deep as the setting. The side windows run between the bottom and top ones,
-        // which draw the corners themselves.
+        // Screen-edge glow: windows along the chosen edges of each screen (the top one just below the menu bar),
+        // as deep as the setting. The side windows run between the bottom and top ones, which draw the corners
+        // themselves; without a bottom or top window the sides run all the way down or up.
         var edgeFrames: [(edge: Int, frame: NSRect, run: CGFloat)] = []
+        let sides = settings.edgeGlowSides
         if settings.edgeGlow {
             for (screen, plan) in plans {
                 let f = screen.frame
                 // At most a third of the screen, so the left and right glows never overlap.
                 let thickness = min(CGFloat(settings.edgeGlowDepth), min(f.width, f.height) / 3).rounded()
                 let top = f.maxY - plan.glowTop
-                let sideTop = settings.edgeGlowTop ? top - thickness : top
-                let sideHeight = max(1, sideTop - f.minY - thickness)
+                let sideTop = sides.contains(.top) ? top - thickness : top
+                let sideBottom = sides.contains(.bottom) ? f.minY + thickness : f.minY
+                let sideHeight = max(1, sideTop - sideBottom)
                 // The sides' bands run on through the top corners, up to the menu bar.
-                let run = top - f.minY - thickness
-                edgeFrames += [
-                    (1, NSRect(x: f.minX, y: f.minY + thickness, width: thickness, height: sideHeight), run),
-                    (2, NSRect(x: f.maxX - thickness, y: f.minY + thickness, width: thickness, height: sideHeight), run),
-                    (3, NSRect(x: f.minX, y: f.minY, width: f.width, height: thickness), run),
-                ]
-                if settings.edgeGlowTop {
+                let run = top - sideBottom
+                if sides.contains(.left) {
+                    edgeFrames.append((1, NSRect(x: f.minX, y: sideBottom, width: thickness, height: sideHeight), run))
+                }
+                if sides.contains(.right) {
+                    edgeFrames.append((2, NSRect(x: f.maxX - thickness, y: sideBottom, width: thickness, height: sideHeight), run))
+                }
+                if sides.contains(.bottom) {
+                    edgeFrames.append((3, NSRect(x: f.minX, y: f.minY, width: f.width, height: thickness), run))
+                }
+                if sides.contains(.top) {
                     edgeFrames.append((4, NSRect(x: f.minX, y: top - thickness, width: f.width, height: thickness), run))
                 }
             }
@@ -371,6 +377,7 @@ final class OverlayController: NSObject {
             window.alphaValue = settings.opacity
             window.setFrame(target.frame, display: false)
             window.eqView.edgeRun = target.run
+            window.eqView.edgeSides = sides
             window.eqView.analyzer = analyzer
             window.orderFrontRegardless()
         }

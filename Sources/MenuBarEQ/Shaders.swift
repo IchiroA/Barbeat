@@ -34,7 +34,9 @@ enum ShaderParam {
     /// Voice: its color (r, g, b), how far it spreads out from the middle of the screen (0...1, 1 = everywhere),
     /// and the menu bar glow's strength (0...1). Uses `ambientRect` for where this window sits on its screen.
     static let voiceColor = 61, voiceTint = 64, voiceGlow = 65
-    static let count = 66
+    /// Edge glow: the sides that are on (`ScreenSides` raw value: 1 left, 2 right, 4 top, 8 bottom).
+    static let edgeSides = 66
+    static let count = 67
 
     /// Band buffer: levels for mid/left/right, then peaks for mid/left/right.
     static let maxBands = 128
@@ -110,6 +112,7 @@ enum Shaders {
     constant int P_AMBIENT = \(ShaderParam.ambient);
     constant int P_AMBIENT_RECT = \(ShaderParam.ambientRect);
     constant int P_EDGE_RUN = \(ShaderParam.edgeRun);
+    constant int P_EDGE_SIDES = \(ShaderParam.edgeSides);
     constant int P_TEXT_GUARD = \(ShaderParam.textGuard);
     constant int P_BAR_COLUMNS = \(ShaderParam.barColumns);
     constant int P_VOICE_COLOR = \(ShaderParam.voiceColor);
@@ -338,7 +341,8 @@ enum Shaders {
             float4 g = edgeGlowAt(P, B, C, vertical, left ? 1 : 2, top ? across : 0.5 * across,
                                   top ? H - y : y, thickness, left ? pulseLeft : pulseRight);
             float side = left ? x : W - x;
-            if (side < thickness) {
+            bool sideOn = (int(P[P_EDGE_SIDES]) & (left ? 1 : 2)) != 0;
+            if (sideOn && side < thickness) {
                 // The corners carry on the side glow, so in Ambient light they take the side's color.
                 Colors corner = C;
                 if (C.ambient) {
