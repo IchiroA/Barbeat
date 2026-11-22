@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import Foundation
 
 /// Follows the music's tempo and keeps a beat clock locked to it, like a DJ app's beat grid, so effects land on

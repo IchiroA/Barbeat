@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import SwiftUI
 
 /// The Custom palette's editor: four color blocks, the color direction, a picker for the selected block,

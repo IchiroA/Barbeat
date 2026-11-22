@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import AppKit
 import AVFoundation
 import CoreMedia
@@ -7,7 +8,8 @@ import ScreenCaptureKit
 /// The colors of what's on screen, for the Screen palette. ScreenCaptureKit hands over a few tiny frames a second
 /// (scaled down by macOS on the GPU), and each one is boiled down to a three-color palette ("Main colors") and the
 /// colors along each edge of the screen ("Ambient light"). Barbeat's own windows are left out of the picture.
-/// When listening to one app, its biggest window is watched instead of the whole screen.
+/// When listening to one app, its biggest window is watched instead of the whole screen. With a camera or capture
+/// device chosen under "What it watches", that picture is read instead (`CameraCapture`), through the same analysis.
 /// With light beams on, bright light that sweeps across the picture (stage beams, flashes) is followed too,
 /// and spills its own color out of the screen next to it, like TV backlighting does.
 final class ScreenColors: NSObject, ObservableObject {
@@ -68,12 +70,25 @@ final class ScreenColors: NSObject, ObservableObject {
         case stoppedByUser
         case failed(String)
         case testImage
+        /// A camera or capture device is being watched instead of the screen.
+        case watchingCamera(String)
+        case needsCameraPermission
+        case cameraDenied
+        /// The camera runs but no picture has come in for a while (a capture device without a signal).
+        case waitingForCamera(String)
+        case cameraFailed(String)
     }
 
     @Published private(set) var state: State = .off
+    /// The chosen camera while it's unplugged and the screen is watched meanwhile.
+    @Published private(set) var missingCamera: String?
 
     fileprivate var displays: Set<CGDirectDisplayID> = []
     private var followingApp: String?
+    /// The camera to watch instead of the screen, if any.
+    private var camera: CameraCapture.Config?
+    /// The chosen camera is missing, so the screen is watched until it comes back.
+    private var cameraFallback = false
     private var watchers: [CGDirectDisplayID: Watcher] = [:]
     private var target: [CGDirectDisplayID: Colors] = [:]
     private var current: [CGDirectDisplayID: Colors] = [:]
@@ -218,16 +233,19 @@ final class ScreenColors: NSObject, ObservableObject {
         followBeams = beams
         frameRate = rate
         watchers.values.forEach { $0.configure(beams: beams, frameRate: rate) }
+        CameraCapture.shared.configure(beams: beams, frameRate: rate)
         if verbose { print("screen colors: \(rate) frames a second, light beams \(beams ? "on" : "off")") }
     }
 
     // MARK: - What to watch
 
     /// Watches these displays (none stops everything). With an app's bundle ID, its biggest window is watched instead.
-    func watch(displays: Set<CGDirectDisplayID>, followingApp app: String?) {
-        guard displays != self.displays || app != followingApp else { return }
+    /// With a camera, that is watched instead of the screen (every display gets its colors).
+    func watch(displays: Set<CGDirectDisplayID>, followingApp app: String?, camera: CameraCapture.Config? = nil) {
+        guard displays != self.displays || app != followingApp || camera != self.camera else { return }
         self.displays = displays
         followingApp = app
+        self.camera = camera
         stoppedByUser = false
         if displays.isEmpty {
             stopAll()
@@ -242,39 +260,109 @@ final class ScreenColors: NSObject, ObservableObject {
             return
         }
         guard liveAllowed else { return }
-        if timer == nil {
-            // Windows come and go and move between screens: look again every few seconds.
-            timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
-        }
         if state == .off {
             watching = .starting
             publish()
         }
+        if let camera {
+            stopScreenWatching()
+            cameraFallback = false
+            missingCamera = nil
+            let feed = CameraCapture.shared
+            feed.onChange = { [weak self] in self?.cameraChanged() }
+            feed.onFrame = { [weak self] result in
+                guard let self else { return }
+                for id in self.displays { self.received(result, from: id) }
+            }
+            feed.use(.colors, camera)
+            cameraChanged()
+        } else {
+            CameraCapture.shared.use(.colors, nil)
+            cameraFallback = false
+            missingCamera = nil
+            startScreenWatching()
+        }
+    }
+
+    /// "Try Again" in the panel: after the user changes a permission, or stopped it from the menu bar.
+    func retry() {
+        stoppedByUser = false
+        if camera != nil { CameraCapture.shared.retry() }
+        if camera == nil || cameraFallback { refresh(userAsked: true) }
+    }
+
+    private func startScreenWatching() {
+        if timer == nil {
+            // Windows come and go and move between screens: look again every few seconds.
+            let timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.refresh() }
+            timer.tolerance = 0.5
+            self.timer = timer
+        }
         refresh()
     }
 
-    /// "Try Again" in the panel: after the user changes the permission, or stopped it from the menu bar.
-    func retry() {
-        stoppedByUser = false
-        refresh(userAsked: true)
-    }
-
-    private func stopAll() {
+    private func stopScreenWatching() {
         timer?.invalidate()
         timer = nil
-        videoTimer?.invalidate()
-        videoTimer = nil
         generation += 1
         watchers.values.forEach { $0.stop() }
         watchers.removeAll()
         darkDisplays.removeAll()
+    }
+
+    private func stopAll() {
+        stopScreenWatching()
+        videoTimer?.invalidate()
+        videoTimer = nil
+        CameraCapture.shared.use(.colors, nil)
+        cameraFallback = false
+        missingCamera = nil
         // The last colors stay, so coming back to the Screen palette doesn't flash the fallback.
         watching = .off
         publish()
     }
 
+    /// The camera's state changed: show it, and watch the screen meanwhile while the camera is unplugged.
+    private func cameraChanged() {
+        guard camera != nil else { return }
+        switch CameraCapture.shared.state {
+        case .capturing(let name):
+            if cameraFallback {
+                cameraFallback = false
+                missingCamera = nil
+                stopScreenWatching()
+            }
+            watching = .watchingCamera(name)
+        case .missing(let name):
+            // Unplugged: the screen until it's back (`apply` then says what's watched).
+            if !cameraFallback {
+                cameraFallback = true
+                missingCamera = name
+                startScreenWatching()
+            }
+            return
+        case .needsPermission:
+            stopScreenWatching()
+            watching = .needsCameraPermission
+        case .denied:
+            stopScreenWatching()
+            watching = .cameraDenied
+        case .waiting(let name):
+            watching = .waitingForCamera(name)
+        case .failed(let message):
+            stopScreenWatching()
+            watching = .cameraFailed(message)
+        case .starting:
+            if !cameraFallback { watching = .starting }
+        case .off:
+            break
+        }
+        publish()
+    }
+
     private func refresh(userAsked: Bool = false) {
-        guard !displays.isEmpty, testImage == nil, testVideo == nil, liveAllowed, !stoppedByUser else { return }
+        guard !displays.isEmpty, testImage == nil, testVideo == nil, liveAllowed, !stoppedByUser,
+              camera == nil || cameraFallback else { return }
         // Watching whole screens and all running: nothing to look up until something changes.
         if !userAsked, followingApp == nil, displays.allSatisfy({ watchers[$0]?.isWatchingWholeDisplay == true }) { return }
         if !CGPreflightScreenCaptureAccess() {
@@ -381,7 +469,7 @@ final class ScreenColors: NSObject, ObservableObject {
     fileprivate func publish() {
         let isWatching: Bool
         switch watching {
-        case .watchingScreen, .watchingWindow, .testImage: isWatching = true
+        case .watchingScreen, .watchingWindow, .testImage, .watchingCamera: isWatching = true
         default: isWatching = false
         }
         let next: State = isWatching && !darkDisplays.isEmpty && darkDisplays.isSuperset(of: displays) ? .dark : watching
@@ -660,11 +748,19 @@ enum ScreenAnalysis {
         }
     }
 
+    /// How wide the frames analyzed are, in pixels: screen frames come this size, and bigger frames (a camera's) are
+    /// read every n-th pixel so they cost the same.
+    static let sampleWidth = 192
+
     /// `base` holds 8-bit pixels, BGRA or RGBA, first row at the top of the screen.
     /// With a beam tracker, light beams are looked for too (it remembers the frames before).
-    static func analyze(_ base: UnsafeRawPointer, width: Int, height: Int, bytesPerRow: Int, bgra: Bool,
-                        beams tracker: BeamTracker? = nil) -> Result {
+    /// `step` reads only every n-th pixel across and down (for big frames); the colors come out the same.
+    static func analyze(_ base: UnsafeRawPointer, width fullWidth: Int, height fullHeight: Int, bytesPerRow: Int, bgra: Bool,
+                        beams tracker: BeamTracker? = nil, step: Int = 1) -> Result {
         let cols = ScreenColors.columns, rows = ScreenColors.rows
+        let step = max(1, step)
+        let width = max(1, fullWidth / step), height = max(1, fullHeight / step)
+        let pixelStride = step * 4, rowStride = step * bytesPerRow
         // Each cell of a coarse grid sums its pixels' colors, weighted so bright, colorful pixels count most
         // and black counts for nothing (stage lights against a dark stage, video inside letterbox bars).
         var cells = [SIMD4<Float>](repeating: .zero, count: cols * rows)   // r·w, g·w, b·w, w
@@ -677,10 +773,10 @@ enum ScreenAnalysis {
         let bytes = base.assumingMemoryBound(to: UInt8.self)
         let (ri, bi) = bgra ? (2, 0) : (0, 2)
         for y in 0..<height {
-            let row = bytes + y * bytesPerRow
+            var p = bytes + y * rowStride
             let cellRow = min(rows - 1, y * rows / height) * cols
             for x in 0..<width {
-                let p = row + x * 4
+                defer { p += pixelStride }
                 let r = Float(p[ri]) / 255, g = Float(p[1]) / 255, b = Float(p[bi]) / 255
                 let hi = max(r, g, b), lo = min(r, g, b)
                 let s: Float = hi > 0 ? (hi - lo) / hi : 0
@@ -745,8 +841,8 @@ enum ScreenAnalysis {
         let colors = ScreenColors.Colors(palette: palette, top: spread(top), bottom: spread(bottom),
                                          left: spread(left), right: spread(right))
         let beams = tracker.map {
-            findBeams($0, base: base, width: width, height: height, bytesPerRow: bytesPerRow, bgra: bgra,
-                      glow: glow, histogram: histogram, counts: counts)
+            findBeams($0, base: base, width: width, height: height, pixelStride: pixelStride, rowStride: rowStride,
+                      bgra: bgra, glow: glow, histogram: histogram, counts: counts)
         }
         return Result(colors: colors, isDark: isDark, beams: beams)
     }
@@ -775,7 +871,7 @@ enum ScreenAnalysis {
     /// Light beams: light well above the picture's own level (stage beams, flashes, spotlights) that has just
     /// appeared or moved. Each edge spot gets the color of the new light next to it, and how much of its area it lights.
     private static func findBeams(_ tracker: BeamTracker, base: UnsafeRawPointer, width: Int, height: Int,
-                                  bytesPerRow: Int, bgra: Bool, glow: [Float], histogram: [Int],
+                                  pixelStride: Int, rowStride: Int, bgra: Bool, glow: [Float], histogram: [Int],
                                   counts: [Float]) -> ScreenColors.Beams {
         let cols = ScreenColors.columns, rows = ScreenColors.rows
         // The picture's own level is where its darkest 30% ends. Light has to stand well clear of that to count,
@@ -793,14 +889,14 @@ enum ScreenAnalysis {
             let bytes = base.assumingMemoryBound(to: UInt8.self)
             let (ri, bi) = bgra ? (2, 0) : (0, 2)
             for y in 0..<height {
-                let row = bytes + y * bytesPerRow
+                let row = bytes + y * rowStride
                 let cellRow = min(rows - 1, y * rows / height) * cols
                 for x in 0..<width {
                     let v = glow[y * width + x]
                     guard v > low else { continue }
                     let t = min(1, (v - low) / (high - low))
                     let h = t * t * (3 - 2 * t)
-                    let p = row + x * 4
+                    let p = row + x * pixelStride
                     lit[cellRow + min(cols - 1, x * cols / width)] +=
                         SIMD4(Float(p[ri]) / 255 * h, Float(p[1]) / 255 * h, Float(p[bi]) / 255 * h, h)
                 }

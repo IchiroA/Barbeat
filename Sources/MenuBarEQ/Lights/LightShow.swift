@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import Foundation
 
 // The light show: turns the music and Barbeat's colors into a color and brightness for every light.

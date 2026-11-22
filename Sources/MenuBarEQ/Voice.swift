@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import SwiftUI
 import AppKit
 import Combine

@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import Foundation
 import Combine
 
@@ -174,6 +175,12 @@ final class Settings: ObservableObject {
     @Published var sourceDeviceUID: String { didSet { defaults.set(sourceDeviceUID, forKey: Key.sourceDeviceUID) } }
     @Published var sourceDeviceName: String { didSet { defaults.set(sourceDeviceName, forKey: Key.sourceDeviceName) } }
 
+    /// What Screen colors (and the kaleidoscope) watch: the screen, or a camera or capture device, remembered by ID
+    /// with a name to show while it's away.
+    @Published var pictureSource: PictureSource { didSet { defaults.set(pictureSource.rawValue, forKey: Key.pictureSource) } }
+    @Published var cameraUID: String { didSet { defaults.set(cameraUID, forKey: Key.cameraUID) } }
+    @Published var cameraName: String { didSet { defaults.set(cameraName, forKey: Key.cameraName) } }
+
     // First-launch values (Ichiro's own setup).
     static let defaultSparkPower = 0.6
     static let defaultEdgeGlowDepth = 241.0
@@ -213,6 +220,7 @@ final class Settings: ObservableObject {
         static let screenBeamsToLights = "screenBeamsToLights"
         static let audioSource = "audioSource", sourceAppID = "sourceAppID", sourceAppName = "sourceAppName"
         static let sourceDeviceUID = "sourceDeviceUID", sourceDeviceName = "sourceDeviceName"
+        static let pictureSource = "pictureSource", cameraUID = "cameraUID", cameraName = "cameraName"
     }
 
     /// Gradients are saved as JSON text, so they're readable with `defaults read`.
@@ -263,6 +271,9 @@ final class Settings: ObservableObject {
             Key.sourceAppName: "",
             Key.sourceDeviceUID: "",
             Key.sourceDeviceName: "",
+            Key.pictureSource: PictureSource.screen.rawValue,
+            Key.cameraUID: "",
+            Key.cameraName: "",
         ])
         enabled = defaults.bool(forKey: Key.enabled)
         style = EQStyle(rawValue: defaults.string(forKey: Key.style) ?? "") ?? .center
@@ -327,6 +338,9 @@ final class Settings: ObservableObject {
         sourceAppName = defaults.string(forKey: Key.sourceAppName) ?? ""
         sourceDeviceUID = defaults.string(forKey: Key.sourceDeviceUID) ?? ""
         sourceDeviceName = defaults.string(forKey: Key.sourceDeviceName) ?? ""
+        pictureSource = PictureSource(rawValue: defaults.string(forKey: Key.pictureSource) ?? "") ?? .screen
+        cameraUID = defaults.string(forKey: Key.cameraUID) ?? ""
+        cameraName = defaults.string(forKey: Key.cameraName) ?? ""
         // Read these after every property is set (load needs self). didSet doesn't run inside init.
         if let saved = load(CustomGradient.self, Key.customGradient) { customGradient = saved }
         if var slots = load([CustomGradient?].self, Key.savedGradients) {

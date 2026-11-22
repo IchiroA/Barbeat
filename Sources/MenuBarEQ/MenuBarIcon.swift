@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import SwiftUI
 import AppKit
 

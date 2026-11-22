@@ -5,7 +5,9 @@ Turns your Mac's menu bar, and the rest of your screen, into a light show that m
 
 Made by Ichiro Ashihara (@IchiroA). © 2026 Ichiro Ashihara. Open source under the MIT License.
 
-Needs: a Mac with Apple Silicon (M1 or newer) running macOS 14.2 Sonoma or later.
+Needs: a Mac with Apple Silicon (M1 or newer) running macOS 14.2 Sonoma or later. Intel Macs aren't supported.
+Optional: a camera or HDMI capture device macOS sees without a driver (UVC), or an iPhone as a Continuity Camera;
+a Philips Hue Bridge (the square v2 model) with an Entertainment area, or WLED / Art-Net lights on your network.
 
 Install
 1. Drag "Barbeat" into your Applications folder.
@@ -21,6 +23,11 @@ Install
 
 If macOS won't open the app
 Open System Settings > Privacy & Security, scroll down, and click "Open Anyway" next to Barbeat.
+
+New in 2.2
+Screen colors and the kaleidoscope can watch a camera or capture device instead of the screen: a game console,
+Apple TV or Blu-ray player on an HDMI capture device, a webcam, or your iPhone (Settings > Screen colors > What it
+watches; macOS asks for camera access the first time). Barbeat also rests more while nothing plays.
 
 New in 2.1
 Choose which edges of the screen glow (Settings > Glow and screens > Sides). The kaleidoscope now covers the
@@ -44,6 +51,7 @@ apps (just the edge glow, or the menu bar visuals too), and Launch at login.
 
 Listen to: everything your Mac plays, just one app (say Spotify, so calls and alerts don't move the bars),
 or a microphone / audio input. The first time you pick an input, macOS asks for microphone access.
+A capture device's sound is one click away under Screen colors > What it watches ("Listen to Its Sound Too").
 
 If nothing moves
 Make sure Barbeat is allowed under System Settings > Privacy & Security >

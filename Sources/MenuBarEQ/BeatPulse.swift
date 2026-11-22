@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import SwiftUI
 import AppKit
 import Combine
@@ -171,7 +172,7 @@ enum PulseArt {
                                   space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return }
-        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        PNGFile.write(image, to: path)
         print("pulse snapshot: wrote \(path)")
     }
 }

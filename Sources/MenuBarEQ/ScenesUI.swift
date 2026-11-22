@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
@@ -353,6 +354,8 @@ enum SceneFiles {
         var barbeat = "scenes"
         var version = 1
         var app: String
+        /// Who made Barbeat (a scene file is Barbeat's output too).
+        var author = "\(Credits.author) (\(Credits.handle))"
         var exported: Date
         var scenes: [BarbeatScene]
     }

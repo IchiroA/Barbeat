@@ -14,6 +14,9 @@ driven by whatever your Mac is playing.
   color, or the display's brightness itself, locked to the song's tempo like a DJ app's beat grid.
 - **Kaleidoscope** (new in 2.0): a show mode that turns your screen into a kaleidoscope (Mirror, Crystal or Tunnel)
   that turns with the tempo, zooms on every beat and opens a flower of the music's spectrum.
+- **Any picture** (new in 2.2): Screen colors and the kaleidoscope can watch a camera or capture device instead of
+  the screen: an HDMI capture device with a game console, Apple TV or Blu-ray player on it, a webcam, a virtual
+  camera, or your iPhone.
 - **Voice**: colors and a glow that follow the singer, tuned against isolated vocals.
 - **Lights**: Philips Hue and WLED / Art-Net lights in the same colors, with mirror, sparkles and a sleep timer.
 - **`barbeat://` links** for Shortcuts, Stream Deck and Raycast, and updates that install themselves (with your OK).
@@ -29,6 +32,16 @@ Get the latest version from the [Releases](../../releases) page: download `Barbe
 **Barbeat** into Applications. It's signed and notarized by Apple, so it opens without warnings.
 Needs a Mac with Apple Silicon (M1 or newer) and macOS 14.2 or later.
 
+### What it needs
+
+| | Minimum |
+| --- | --- |
+| Mac | Any Mac with Apple Silicon: M1 or newer. Developed and tested on an M2 Max; nothing in Barbeat needs more than an M1 (the heaviest work, boiling a frame down to colors, takes under half a millisecond). Intel Macs aren't supported: the download is Apple Silicon only. |
+| macOS | 14.2 Sonoma or later. Barbeat listens through Core Audio process taps, which arrived in 14.2. |
+| Permissions | Asked one at a time, when first used: system audio recording to listen; Screen Recording for Screen colors and the kaleidoscope on the screen; Microphone for an audio input; Camera for a camera or capture device; Local Network for lights. |
+| Camera or capture device (optional) | Anything macOS shows as a camera without a driver (UVC): webcams, HDMI capture devices such as an Elgato Cam Link or the common USB capture sticks, virtual cameras, or an iPhone XR or later with iOS 16 as a Continuity Camera. |
+| Lights (optional) | A Philips Hue Bridge (the square v2 model) with an Entertainment area made in the Hue app, and/or WLED or other Art-Net devices on the same network. |
+
 **Guide:** [ichiroa.github.io/Barbeat](https://ichiroa.github.io/Barbeat/) has a quick start, every setting, Scenes, Voice,
 Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.github.io/Barbeat/privacy.html). It's built from the `docs` folder.
 
@@ -40,7 +53,8 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
   (built-in mic, audio interface, loopback devices like BlackHole). An unplugged input falls back to system audio
   until it's back. Bluetooth mics get a warning: using one puts the headset in low-quality call mode.
 - Draws in a click-through window one level below the menu bar, so menus and icons stay on top. Runs at 60 fps,
-  or 30 fps on battery to save power, and stops redrawing while it's silent.
+  or 30 fps on battery to save power; after two quiet seconds the loop drops to 15 a second (the first sound brings
+  it straight back), and it stops redrawing while nothing moves.
 - Styles: **LED**, **Bars**, **Center**, **Glow** (soft color wash per frequency), **Pulse** (the whole menu bar
   color pulses with the beat), **VU** (a stereo meter that shoots out of the notch), **Aura** (light hugging the
   notch that flares with the bass), **Waterfall** (the music's recent history flowing outward), **Scope** (a live
@@ -62,6 +76,18 @@ Lights setup, `barbeat://` links, help and the [privacy policy](https://ichiroa.
   music is quiet, fading over half a second so sweeps leave a trail; in Main colors it tints the brightest colors.
   Each part of the screen gets used to steady bright things (a white window, title text) within a few seconds, so
   only changes count. Frames go up to 15 a second (10 on battery) while it's on, about 0.3 ms of work each.
+- **What it watches** (v2.2, Settings › Screen colors): Screen colors and the kaleidoscope take their picture from
+  **your screen** or from a **camera or capture device**: an HDMI capture device (a game console, Apple TV or Blu-ray
+  player plugged into the Mac), a webcam, a virtual camera, or an iPhone as a Continuity Camera. `PictureSource.swift`:
+  `CameraList` (AVFoundation's cameras, kept up to date as they come and go), `CameraCapture` (one shared
+  `AVCaptureSession`, BGRA frames, the device's own format and frame rate left alone so other apps can share it; only
+  every n-th pixel is read, so a 4K feed costs the same as a 192-pixel screen frame; the kaleidoscope gets the full
+  frames) and `CameraAccess` (explains, then lets macOS ask for camera access; scenes and links never put up the
+  prompt). The same analysis makes the colors, so Ambient light, Main colors, light beams and the lights all work.
+  An unplugged device falls back to the screen until it's back; a device that sends nothing is restarted now and then
+  and reported as "Waiting for a picture". A capture device's audio input is one click away ("Listen to Its Sound
+  Too", matched by name). Needs the camera entitlement and `NSCameraUsageDescription`; scenes save it in their Screen
+  colors part; `barbeat://watch/camera|screen` switches it.
 - **Panel and Settings window** (v1.11): the menu bar panel holds quick controls only (on/off, Screen colors card
   with the live colors it sees, style, palette when Screen colors is off, brightness, Lights and Voice rows).
   **Settings…** (⌘, while the panel is open) opens a window with a sidebar: Screen colors (first, with the stage
@@ -275,6 +301,7 @@ The icon is drawn by `scripts/make-icon.swift` (`swift scripts/make-icon.swift` 
 | `--icon-snapshot out.png` | Renders three menu bar icon samples, then quits |
 | `--bar-columns N` | Draws N bar columns per band, as on a screen N times wider than 16:9 (to test in-between bars on any screen) |
 | `--screen-video clip.mp4` | Screen colors play that video's frames instead of the screen, looping, 15 a second (no permission needed); `--verbose` prints each frame's light beams |
+| `--picture screen\|camera:<unique id>` | Watches that instead of the saved choice (`--verbose` lists the cameras and their IDs, and prints frames per 5 s while one is read); asks for camera access itself |
 
 Example: `"build/Barbeat.app/Contents/MacOS/Barbeat" --demo --snapshot /tmp/eq.png`
 
@@ -299,6 +326,7 @@ or under 3 flashes a second. The tuning constants are at the top of `Sources/Men
 | File | Role |
 | --- | --- |
 | `AudioCapture.swift` | Capture from system audio / one app (process tap + private aggregate device) or an input device; the source lists for the panel |
+| `PictureSource.swift` | A camera or capture device as the picture for Screen colors and the kaleidoscope: the camera list, the shared capture, the permission explainer |
 | `SampleRingBuffer.swift` | Thread-safe stereo buffer between the audio thread and the render loop |
 | `SpectrumAnalyzer.swift` | FFT, log-spaced bands, auto level, smoothing, peak caps, VU meter, pulse |
 | `OverlayController.swift` | Overlay windows per display, 60 fps render loop, idle when silent |

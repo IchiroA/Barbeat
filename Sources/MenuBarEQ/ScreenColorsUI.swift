@@ -1,5 +1,7 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import SwiftUI
 import AppKit
+import AVFoundation
 
 /// Turning Screen colors on. The first time, before macOS asks for Screen Recording, Barbeat says what it reads.
 enum ScreenColorsAccess {
@@ -77,7 +79,14 @@ struct ScreenColorsStatus: View {
                     if screen.state == .needsPermission {
                         Button("Open Privacy Settings") { ScreenColorsAccess.openPrivacySettings() }
                     }
-                    Button(screen.state == .stoppedByUser ? "Start Again" : "Try Again") { screen.retry() }
+                    if screen.state == .needsCameraPermission {
+                        Button("Allow Camera Access") { CameraAccess.ask { _ in screen.retry() } }
+                    } else {
+                        if screen.state == .cameraDenied {
+                            Button("Open Privacy Settings") { CameraAccess.openPrivacySettings() }
+                        }
+                        Button(screen.state == .stoppedByUser ? "Start Again" : "Try Again") { screen.retry() }
+                    }
                 }
                 .controlSize(.small)
             }
@@ -87,8 +96,10 @@ struct ScreenColorsStatus: View {
     /// Only worth showing in the panel when something needs attention.
     static func needsAttention(_ state: ScreenColors.State) -> Bool {
         switch state {
-        case .needsPermission, .stoppedByUser, .failed: return true
-        default: return false
+        case .needsPermission, .stoppedByUser, .failed, .needsCameraPermission, .cameraDenied, .waitingForCamera, .cameraFailed:
+            return true
+        default:
+            return false
         }
     }
 
@@ -98,15 +109,23 @@ struct ScreenColorsStatus: View {
         case .needsPermission: return "Barbeat needs permission to see the screen"
         case .watchingScreen: return "Watching the whole screen"
         case .watchingWindow(let name): return name.isEmpty ? "Watching the app's window" : "Watching \(name)'s window"
-        case .dark: return "The screen looks black"
+        case .dark: return "The picture looks black"
         case .stoppedByUser: return "Stopped from the menu bar"
         case .failed: return "Couldn't watch the screen"
         case .testImage: return "Using a test picture"
+        case .watchingCamera(let name): return "Watching \(name)"
+        case .needsCameraPermission: return "Barbeat needs permission to use the camera"
+        case .cameraDenied: return "Camera access is off"
+        case .waitingForCamera(let name): return "Waiting for a picture from \(name)"
+        case .cameraFailed: return "Couldn't read the camera"
         }
     }
 
     private var detail: String? {
         let privacy = "Frames are read live and never saved. macOS shows a recording icon in the menu bar while this is on."
+        if let missing = screen.missingCamera, case .watchingScreen = screen.state {
+            return "\(missing) isn't connected, so Barbeat watches the screen until it's back. " + privacy
+        }
         switch screen.state {
         case .needsPermission:
             return "Allow Barbeat under Privacy & Security › Screen & System Audio Recording, then click Try Again. macOS may ask to reopen Barbeat."
@@ -115,6 +134,16 @@ struct ScreenColorsStatus: View {
                 return "\(settings.sourceAppName) has no window showing, so Barbeat watches the whole screen. " + privacy
             }
             return privacy
+        case .watchingCamera:
+            return "The colors come from this device instead of the screen. Frames are read live and never saved; its camera light stays on while Barbeat watches it."
+        case .needsCameraPermission:
+            return "Click Allow Camera Access, then let macOS allow Barbeat."
+        case .cameraDenied:
+            return "Allow Barbeat under Privacy & Security › Camera, then click Try Again. Or watch the screen instead, under What it watches."
+        case .waitingForCamera:
+            return "Nothing is coming in. Check that the device is on and its source is playing (an HDMI capture device needs a signal)."
+        case .cameraFailed(let message):
+            return message
         case .watchingWindow:
             return "Only this window, because it's the app you're listening to. " + privacy
         case .dark:
@@ -132,9 +161,9 @@ struct ScreenColorsStatus: View {
 
     private var dotColor: Color {
         switch screen.state {
-        case .watchingScreen, .watchingWindow, .testImage: return .green
-        case .off, .starting, .dark, .stoppedByUser: return .yellow
-        case .needsPermission, .failed: return .red
+        case .watchingScreen, .watchingWindow, .testImage, .watchingCamera: return .green
+        case .off, .starting, .dark, .stoppedByUser, .waitingForCamera: return .yellow
+        case .needsPermission, .failed, .needsCameraPermission, .cameraDenied, .cameraFailed: return .red
         }
     }
 
@@ -187,7 +216,87 @@ struct ScreenColorsCard: View {
     }
 
     private var summary: String {
-        settings.screenColorMode.title + (settings.screenBeams ? " · following light beams" : "")
+        var text = settings.screenColorMode.title + (settings.screenBeams ? " · following light beams" : "")
+        if settings.pictureSource == .camera { text += " · " + (settings.cameraName.isEmpty ? "camera" : settings.cameraName) }
+        return text
+    }
+}
+
+/// Settings › Screen colors › What it watches: the screen, or a camera or capture device.
+struct PictureSourcePicker: View {
+    @ObservedObject var settings: Settings
+    @ObservedObject var cameras: CameraList
+    @ObservedObject var inputs: AudioSourceList
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Picture", selection: source) {
+                ForEach(PictureSource.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            if settings.pictureSource == .camera {
+                Picker("Camera", selection: camera) {
+                    if settings.cameraUID.isEmpty {
+                        Text("Choose a camera…").tag("")
+                    } else if chosen == nil {
+                        Text("\(settings.cameraName) (not connected)").tag(settings.cameraUID)
+                    }
+                    ForEach(cameras.devices) { device in
+                        Text(device.isContinuity ? "\(device.name) (iPhone)" : device.name).tag(device.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 360, alignment: .leading)
+                caption("An HDMI capture device (a game console, Apple TV or Blu-ray player plugged into your Mac), a webcam, a virtual camera, or your iPhone. The colors come from its picture instead of the screen; if it's unplugged, Barbeat watches the screen until it's back. macOS asks for camera access the first time.")
+                if let audio = matchingInput, !(settings.audioSource == .device && settings.sourceDeviceUID == audio.id) {
+                    HStack(spacing: 10) {
+                        Button("Listen to Its Sound Too") {
+                            settings.sourceDeviceName = audio.name
+                            settings.sourceDeviceUID = audio.id
+                            settings.audioSource = .device
+                        }
+                        .controlSize(.small)
+                        caption("Its sound comes in as the input “\(audio.name)”, so the bars can move with it as well.")
+                    }
+                } else if settings.audioSource == .device, let audio = matchingInput, settings.sourceDeviceUID == audio.id {
+                    caption("Barbeat listens to its sound too (“\(audio.name)”, under Sound › Listen to).")
+                }
+            } else {
+                caption("What's on your screen, or only the window of the app you're listening to.")
+            }
+        }
+        .onAppear { inputs.refreshDevices() }
+    }
+
+    private var chosen: CameraDevice? { cameras.devices.first { $0.id == settings.cameraUID } }
+
+    /// The audio input with the same name as the camera (a capture device is usually both).
+    private var matchingInput: InputDevice? {
+        guard settings.pictureSource == .camera, !settings.cameraName.isEmpty else { return nil }
+        return DeviceMatch.audioInput(for: settings.cameraName, among: inputs.devices)
+    }
+
+    private var source: Binding<PictureSource> {
+        Binding(get: { settings.pictureSource }, set: { choice in
+            switch choice {
+            case .screen: settings.pictureSource = .screen
+            case .camera: CameraAccess.chooseCamera(settings)
+            }
+        })
+    }
+
+    private var camera: Binding<String> {
+        Binding(get: { settings.cameraUID }, set: { id in
+            if let device = cameras.devices.first(where: { $0.id == id }) { settings.cameraName = device.name }
+            settings.cameraUID = id
+        })
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -232,6 +341,10 @@ struct ScreenColorsPage: View {
                 ScreenColorsStatus(settings: settings, screen: screen)
             }
 
+            SettingsSection("What it watches", caption: "Where the picture comes from. The kaleidoscope mirrors the same picture.") {
+                PictureSourcePicker(settings: settings, cameras: .shared, inputs: .shared)
+            }
+
             SettingsSection("How it colors") {
                 HStack(alignment: .top, spacing: 10) {
                     modeCard(.ambient, symbol: "rectangle.inset.filled",
@@ -262,7 +375,7 @@ struct ScreenColorsPage: View {
                 }
             }
 
-            Text("Barbeat reads small frames of your screen (192 pixels wide, up to 15 a second), or only the window of the app you're listening to. Each one is analyzed in memory and thrown away; nothing is recorded, saved or sent. Barbeat's own windows are left out.")
+            Text("Barbeat reads small frames of your screen (192 pixels wide, up to 15 a second), only the window of the app you're listening to, or a few pixels of each frame from the camera you chose. Each one is analyzed in memory and thrown away; nothing is recorded, saved or sent. Barbeat's own windows are left out.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

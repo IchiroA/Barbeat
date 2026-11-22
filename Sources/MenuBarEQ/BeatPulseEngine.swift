@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import Foundation
 
 /// The beat pulse's amount for this frame, 0...1: jumps on every bass hit and fades quickly, with a little of the

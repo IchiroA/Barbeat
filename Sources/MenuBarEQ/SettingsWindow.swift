@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import SwiftUI
 import AppKit
 import ServiceManagement

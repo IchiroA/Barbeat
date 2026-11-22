@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import Foundation
 
 /// Indices into the per-frame parameter array shared by Swift and the shader.
@@ -68,6 +69,7 @@ extension EQStyle {
 /// Each pixel works out which bar/segment it belongs to and colors itself; output is premultiplied alpha.
 enum Shaders {
     static let source = """
+    // Barbeat's menu bar shader · Ichiro Ashihara (@IchiroA) · MIT License
     #include <metal_stdlib>
     using namespace metal;
 

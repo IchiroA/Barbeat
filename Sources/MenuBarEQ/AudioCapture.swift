@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import Foundation
 import AppKit
 import AVFoundation
@@ -66,6 +67,8 @@ final class AudioCapture {
     private(set) var isCapturing = false
     /// True while the chosen input device is missing and system audio is captured instead.
     private(set) var usingFallback = false
+    /// The last start failed (no output device yet, say): the next change of devices gets another go.
+    private var lastStartFailed = false
 
     var source: CaptureSource = .system {
         didSet { if source != oldValue { restartIfRunning(after: 0.05) } }
@@ -89,8 +92,9 @@ final class AudioCapture {
     init() {
         listeners = [
             // Taps are clocked by the output device, so rebuild them when it changes (e.g. headphones plugged in).
+            // A start that failed (the output device was going away) gets another go too.
             HAL.listen(HAL.system, kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
-                guard let self, self.aggregateID != kAudioObjectUnknown else { return }
+                guard let self, self.isRunning, self.aggregateID != kAudioObjectUnknown || self.lastStartFailed else { return }
                 self.restartIfRunning()
             },
             HAL.listen(HAL.system, kAudioHardwarePropertyProcessObjectList) { [weak self] in self?.processesChanged() },
@@ -174,9 +178,11 @@ final class AudioCapture {
                 }
             }
             isCapturing = true
+            lastStartFailed = false
             onEvent?(.started)
         } catch {
             teardown()
+            lastStartFailed = true
             onEvent?(.failed(error))
         }
     }
@@ -190,10 +196,15 @@ final class AudioCapture {
     }
 
     private func devicesChanged() {
-        guard isRunning, case let .device(uid, _) = source else { return }
-        let present = HAL.inputDevices().contains { $0.id == uid }
-        // Switch to system audio when the device goes away, and back when it returns.
-        if present == usingFallback { restartIfRunning() }
+        guard isRunning else { return }
+        if case let .device(uid, _) = source {
+            let present = HAL.inputDevices().contains { $0.id == uid }
+            // Switch to system audio when the device goes away, and back when it returns.
+            if present == usingFallback { restartIfRunning() }
+        } else if lastStartFailed {
+            // Devices came or went: a start that failed may work now.
+            restartIfRunning()
+        }
     }
 
     // MARK: - Core Audio plumbing
@@ -203,7 +214,7 @@ final class AudioCapture {
         let description = processes.map { CATapDescription(stereoMixdownOfProcesses: $0) }
             ?? CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         description.uuid = UUID()
-        description.name = "Barbeat"
+        description.name = "Barbeat (\(Credits.handle))"
         description.isPrivate = true
         description.muteBehavior = .unmuted
 
@@ -220,7 +231,7 @@ final class AudioCapture {
         // Clocked by the current output device.
         let outputUID = try Self.defaultOutputDeviceUID()
         let aggregate: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "Barbeat Tap",
+            kAudioAggregateDeviceNameKey: "Barbeat Tap (\(Credits.handle))",
             kAudioAggregateDeviceUIDKey: "com.ia.MenuBarEQ.aggregate.\(UUID().uuidString)",
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,

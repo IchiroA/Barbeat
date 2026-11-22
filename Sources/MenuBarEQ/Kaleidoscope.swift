@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import SwiftUI
 import AppKit
 import Combine
@@ -7,9 +8,12 @@ import CoreVideo
 import ScreenCaptureKit
 import os
 
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
+//
 // The kaleidoscope: a show mode that turns the screen into a kaleidoscope moving with the music. It captures the
 // screen the pointer is on below the menu bar (everything but itself, so Barbeat's edge glow spins along), mirrors
-// it into wedges on the GPU and draws that over the whole screen, menu bar included. Pointing at the top of the
+// it into wedges on the GPU and draws that over the whole screen, menu bar included. With a camera or capture device
+// chosen under Screen colors › What it watches, it mirrors that picture instead (and needs no Screen Recording). Pointing at the top of the
 // screen brings the menu bar back, as in a full-screen app. It stays on the desktop it started on (and rests while
 // another one shows). Click anywhere or press Esc to stop.
 // Its options are saved (`kaleidoscope.*`); whether it's running is not, so it never starts by itself.
@@ -143,6 +147,7 @@ final class KaleidoscopeRenderer {
     }
 
     private static let source = """
+    // Barbeat's kaleidoscope shader · Ichiro Ashihara (@IchiroA) · MIT License
     #include <metal_stdlib>
     using namespace metal;
 
@@ -360,7 +365,7 @@ final class KaleidoscopeRenderer {
                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue
                                                            | CGBitmapInfo.byteOrder32Little.rawValue),
                                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return }
-        try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: output))
+        PNGFile.write(image, to: output)
         print("kaleidoscope snapshot: wrote \(output) (\(pattern.title), \(segments) mirrors, from \(source.width)x\(source.height))")
     }
 }
@@ -635,6 +640,9 @@ final class KaleidoscopeController: ObservableObject {
     private let settings = KaleidoscopeSettings.shared
     private var window: KaleidoscopeWindow?
     private var capture: KaleidoscopeCapture?
+    /// The camera being mirrored instead of the screen, if any.
+    private var camera: CameraCapture.Config?
+    private var cameraWarned = false
     private let drawer = KaleidoscopeDrawer()
     private let beat = BeatPulse()
     private var params = KaleidoscopeRenderer.Params()
@@ -670,7 +678,22 @@ final class KaleidoscopeController: ObservableObject {
             problem = "This Mac's graphics couldn't start the kaleidoscope."
             return
         }
-        if !CGPreflightScreenCaptureAccess() {
+        camera = PictureChoice.camera(settings: .shared)
+        if let camera {
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                break
+            case .notDetermined:
+                CameraAccess.ask { [weak self] allowed in
+                    self?.problem = allowed ? nil : "Barbeat needs camera access to mirror \(camera.name)."
+                }
+                problem = "Allow the camera, then start the kaleidoscope again."
+                return
+            default:
+                problem = "Barbeat needs camera access to mirror \(camera.name). Allow it under Privacy & Security › Camera, or watch the screen instead."
+                return
+            }
+        } else if !CGPreflightScreenCaptureAccess() {
             let alert = NSAlert()
             alert.messageText = "Let Barbeat see your screen for the kaleidoscope?"
             alert.informativeText = """
@@ -710,6 +733,7 @@ final class KaleidoscopeController: ObservableObject {
         captureFailures = []
         stopping = false
         onItsDesktop = true
+        cameraWarned = false
         NSApp.activate(ignoringOtherApps: true)
         openWindow(on: screen)
         startCapture()
@@ -740,6 +764,11 @@ final class KaleidoscopeController: ObservableObject {
 
     private func startCapture() {
         guard let window else { return }
+        if let camera {
+            // The camera is shared with Screen colors; the show just asks for every frame.
+            CameraCapture.shared.use(.show, camera)
+            return
+        }
         capture?.stop()
         let capture = KaleidoscopeCapture()
         capture.onStop = { [weak self, weak capture] error in
@@ -786,6 +815,25 @@ final class KaleidoscopeController: ObservableObject {
         } else {
             capture?.stop()
             capture = nil
+            if camera != nil { CameraCapture.shared.use(.show, nil) }
+        }
+    }
+
+    /// The camera the show mirrors went away, or can't be read: say so on the Settings page (the show stays up).
+    private func checkCamera() {
+        guard camera != nil, !cameraWarned else { return }
+        let text: String?
+        switch CameraCapture.shared.state {
+        case .missing(let name): text = "\(name) isn't connected, so there's nothing to mirror."
+        case .waiting(let name): text = "No picture is coming from \(name)."
+        case .failed(let message): text = message
+        case .denied, .needsPermission: text = "Barbeat needs camera access to mirror the camera."
+        default: text = nil
+        }
+        if let text {
+            cameraWarned = true
+            problem = text
+            kaleidoscopeLog.notice("camera: \(text, privacy: .public)")
         }
     }
 
@@ -886,7 +934,9 @@ final class KaleidoscopeController: ObservableObject {
         }
 
         guard let metalLayer = window.view.metalLayer else { return }
-        if drawer.draw(into: metalLayer, pixels: capture?.latest, params: params, extras: extras) {
+        if camera != nil, Int(clock * 2) != Int((clock - dt) * 2) { checkCamera() }
+        let pixels = camera != nil ? CameraCapture.shared.latestFrame : capture?.latest
+        if drawer.draw(into: metalLayer, pixels: pixels, params: params, extras: extras) {
             frames += 1
         } else {
             skipped += 1
@@ -903,6 +953,8 @@ final class KaleidoscopeController: ObservableObject {
     private func finish() {
         capture?.stop()
         capture = nil
+        if camera != nil { CameraCapture.shared.use(.show, nil) }
+        camera = nil
         window?.orderOut(nil)
         window = nil
         if let spaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(spaceObserver) }
@@ -1012,7 +1064,8 @@ struct KaleidoscopePage: View {
             VStack(alignment: .leading, spacing: 6) {
                 note("It covers the whole screen the pointer is on, menu bar included. Point at the top of the screen to bring the menu bar back. Barbeat's edge glow is mirrored in too.")
                 note("It stays on the desktop you start it on. Other desktops look as usual, and the show picks up again when you come back.")
-                note("Barbeat needs Screen Recording (the same permission as Screen colors). Frames go straight to the graphics chip and are thrown away: nothing is recorded, saved or sent. Copy-protected video shows as black.")
+                note("It mirrors the same picture as Screen colors: your screen, or the camera or capture device chosen under Screen colors › What it watches (an HDMI capture device makes a console or Apple TV the kaleidoscope).")
+                note("Watching the screen needs Screen Recording (the same permission as Screen colors); a camera needs camera access. Frames go straight to the graphics chip and are thrown away: nothing is recorded, saved or sent. Copy-protected video shows as black.")
                 note("With Reduce motion on it turns slowly and doesn't zoom.")
             }
         }

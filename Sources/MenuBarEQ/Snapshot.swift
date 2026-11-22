@@ -1,5 +1,25 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import AppKit
 import SwiftUI
+import ImageIO
+import UniformTypeIdentifiers
+
+/// Writes PNG files the way every Barbeat snapshot does: with who made Barbeat in the picture's metadata
+/// (a `tEXt` chunk; `exiftool` or Preview's inspector shows it).
+enum PNGFile {
+    @discardableResult
+    static func write(_ image: CGImage, to path: String) -> Bool {
+        let url = URL(fileURLWithPath: path) as CFURL
+        guard let destination = CGImageDestinationCreateWithURL(url, UTType.png.identifier as CFString, 1, nil) else { return false }
+        let png: [CFString: Any] = [
+            kCGImagePropertyPNGSoftware: "Barbeat \(Credits.version) · \(Credits.handle)",
+            kCGImagePropertyPNGAuthor: "\(Credits.author) (\(Credits.handle))",
+            kCGImagePropertyPNGCopyright: "© 2026 \(Credits.author)",
+        ]
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyPNGDictionary: png] as CFDictionary)
+        return CGImageDestinationFinalize(destination)
+    }
+}
 
 /// Developer aid: `MenuBarEQ --demo --snapshot out.png` saves what the first overlay
 /// is drawing (over a dark background) after a few seconds, then quits.
@@ -35,13 +55,11 @@ extension OverlayController {
         ctx.setAlpha(CGFloat(Settings.shared.opacity))
         ctx.draw(frame, in: rect)
 
-        guard let image = ctx.makeImage(),
-              let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
-        do {
-            try png.write(to: URL(fileURLWithPath: path))
+        guard let image = ctx.makeImage() else { return }
+        if PNGFile.write(image, to: path) {
             print("snapshot: wrote \(path)")
-        } catch {
-            print("snapshot: \(error.localizedDescription)")
+        } else {
+            print("snapshot: couldn't write \(path)")
         }
     }
 }
@@ -88,8 +106,7 @@ enum PanelSnapshot {
             host.layoutSubtreeIfNeeded()
             guard let rep = Self.imageRep(for: host) else { return }
             host.cacheDisplay(in: host.bounds, to: rep)
-            if let png = rep.representation(using: .png, properties: [:]) {
-                try? png.write(to: URL(fileURLWithPath: path))
+            if let image = rep.cgImage, PNGFile.write(image, to: path) {
                 print("panel snapshot: wrote \(path) (\(Int(size.width))×\(Int(size.height)) pt)")
             }
         }

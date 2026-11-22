@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import AppKit
 import Combine
 import QuartzCore
@@ -342,6 +343,7 @@ final class LightHub: ObservableObject {
         let until = Date().addingTimeInterval(sleepLength)
         sleepUntil = until
         sleepTimer = Timer.scheduledTimer(withTimeInterval: sleepLength, repeats: false) { [weak self] _ in self?.sleepNow() }
+        sleepTimer?.tolerance = 1
         note("sleep timer: lights off in \(Int(minutes)) min")
     }
 

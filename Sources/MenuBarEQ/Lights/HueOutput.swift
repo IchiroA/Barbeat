@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import Foundation
 import Combine
 
@@ -414,7 +415,8 @@ final class HuePairing: ObservableObject {
                 for second in 0..<30 {
                     try Task.checkCancellation()
                     set(.pressButton(secondsLeft: 30 - second))
-                    if let found = try await client.pair(deviceType: "barbeat#\(device)") {
+                    // The bridge lists this name among the apps it knows (letters, digits and _ only).
+                    if let found = try await client.pair(deviceType: "barbeat_IchiroA#\(device)") {
                         credentials = found
                         break
                     }

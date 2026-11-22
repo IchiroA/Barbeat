@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import SwiftUI
 
 /// The menu bar panel: quick controls. Everything else is in the Settings window.

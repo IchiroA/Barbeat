@@ -48,7 +48,7 @@
       <a class="button primary" href="https://github.com/IchiroA/Barbeat/releases/latest">Download for Mac</a>
       <a class="button" href="https://github.com/IchiroA/Barbeat">View on GitHub</a>
     </div>
-    <p class="fine"><strong>New in 2.1:</strong> choose which edges of the screen glow, and the <a href="#kaleidoscope">kaleidoscope</a> now covers the whole screen, stays on its own desktop and keeps up with video underneath. <strong>New in 2.0:</strong> <a href="#pulse">the whole screen pulses with the beat</a>, the kaleidoscope show mode, effects locked to the song's tempo, and sharper voice detection.</p>
+    <p class="fine"><strong>New in 2.2:</strong> Screen colors and the kaleidoscope can <a href="#screen-colors">watch a camera or capture device</a> instead of the screen: a console or Apple TV on an HDMI capture device, a webcam, or your iPhone. <strong>New in 2.1:</strong> choose which edges of the screen glow, and the <a href="#kaleidoscope">kaleidoscope</a> now covers the whole screen, stays on its own desktop and keeps up with video underneath. <strong>New in 2.0:</strong> <a href="#pulse">the whole screen pulses with the beat</a>, the kaleidoscope show mode, effects locked to the song's tempo, and sharper voice detection.</p>
     <p class="fine">Free and open source · Apple Silicon (M1 or newer) · macOS 14.2 or later · Signed and notarized by Apple</p>
     <figure>
       <div class="shot glow"><img src="images/hero.jpg" alt="A concert stage lit magenta on the left, violet and blue in the middle and cyan on the right. Barbeat's bars in the menu bar take the same colors as the lights below them." width="2000" height="1292"></div>
@@ -97,6 +97,8 @@
       <p class="prose muted" style="margin-top: 18px;">Barbeat only counts light that stands well above the rest of the picture and has just appeared or moved. Steady bright things, like a white window or captions, fade into the background within a few seconds. <strong>Strength</strong> sets how much of the glow a beam takes over. In Main colors, beams tint the brightest colors instead.</p>
       <h3>Your lights too</h3>
       <p class="prose muted">With <strong>Flash your lights too</strong> on, a beam on screen also lights up your Hue and WLED lights in its own color, the ones on the same side of the room as the beam on screen. A laser sweeping left to right across a concert video sweeps across your room the same way, even in a quiet moment. Like every flash, it's capped at three a second per light.</p>
+      <h3>Or a camera, or whatever's plugged into a capture device</h3>
+      <p class="prose muted">Under <strong>What it watches</strong> (Settings › Screen colors) Barbeat can take its picture from a <strong>camera or capture device</strong> instead of the screen: a game console, Apple TV or Blu-ray player on an HDMI capture device, a webcam, a virtual camera, or your iPhone as a Continuity Camera. Everything above works the same way, Ambient light, light beams and your lights included, and the <a href="#kaleidoscope">kaleidoscope</a> mirrors that picture too. macOS asks for camera access the first time; if the device is unplugged, Barbeat watches the screen until it's back. A capture device's sound is one click away: <strong>Listen to Its Sound Too</strong> picks its audio input under Listen to.</p>
 
       <div class="facts">
         <div class="fact"><strong>Light on the Mac</strong><span>Tiny frames, 192 pixels wide: up to 6 a second, 15 while following beams (10 on battery). About a third of a millisecond of work each.</span></div>
@@ -194,7 +196,7 @@
         <img src="images/settings-kaleidoscope.jpg" alt="Settings › Kaleidoscope: Start Kaleidoscope, Mirror, Crystal or Tunnel, Natural, Vivid or Barbeat's colors, the music flower and glow checkboxes, 6 to 12 mirrors, Turning and Beat zoom sliders and Wander" width="1640" height="1402" loading="lazy">
       </figure>
       <figcaption>Settings › Kaleidoscope.</figcaption>
-      <p class="note">The kaleidoscope needs Screen Recording, the same permission as Screen colors. Copy-protected video looks black to every app, so it's black in the kaleidoscope too. With Reduce motion on, it turns slowly and doesn't zoom.</p>
+      <p class="note">The kaleidoscope mirrors the same picture as Screen colors: your screen (it needs Screen Recording, the same permission as Screen colors) or the camera or capture device chosen under <strong>What it watches</strong>, so a console or Apple TV on an HDMI capture device becomes the kaleidoscope. Copy-protected video looks black to every app, so it's black in the kaleidoscope too. With Reduce motion on, it turns slowly and doesn't zoom.</p>
     </div>
   </section>
 
@@ -209,6 +211,13 @@
         <li><strong>Turn on Screen colors.</strong><p>Click <strong>Turn On Screen Colors</strong> in the welcome window (or flip its switch at the top of the panel). Barbeat explains what it reads, then macOS asks to let it record the screen: allow it, and if macOS offers Quit &amp; Reopen, click it.</p></li>
         <li><strong>Play some music.</strong><p>Barbeat starts with stereo Center bars and a deep glow around the screen. Click the four-bar icon for quick controls, or <strong>Settings…</strong> for everything else. Changes apply instantly and are remembered. Then try <strong>Beat pulse</strong> and the <strong>Kaleidoscope</strong>, at the bottom of the panel.</p></li>
       </ol>
+      <h3 id="requirements">What it needs</h3>
+      <div class="facts">
+        <div class="fact"><strong>A Mac with Apple Silicon</strong><span>M1 or newer, on macOS 14.2 Sonoma or later (Barbeat listens through Core Audio process taps, which arrived in 14.2). Developed and tested on an M2 Max; nothing in it needs more than an M1. Intel Macs aren't supported.</span></div>
+        <div class="fact"><strong>Permissions, asked when first used</strong><span>System audio recording to listen; Screen Recording for Screen colors and the kaleidoscope on the screen; Microphone for an audio input; Camera for a camera or capture device; Local Network for lights.</span></div>
+        <div class="fact"><strong>Any camera macOS sees (optional)</strong><span>Webcams and HDMI capture devices that need no driver (UVC), such as an Elgato Cam Link or the common USB capture sticks; virtual cameras; or an iPhone XR or later with iOS 16 as a Continuity Camera.</span></div>
+        <div class="fact"><strong>Lights (optional)</strong><span>A Philips Hue Bridge (the square v2 model) with an Entertainment area made in the Hue app, and WLED or other Art-Net devices on the same network.</span></div>
+      </div>
     </div>
   </section>
 
@@ -242,6 +251,8 @@
         <div>
           <p class="group-title">Screen colors</p>
           <dl>
+            <dt>What it watches</dt>
+            <dd><strong>Your screen</strong>, or a <strong>camera or capture device</strong>: an HDMI capture device, a webcam, a virtual camera or your iPhone. The kaleidoscope mirrors the same picture. With a capture device, <strong>Listen to Its Sound Too</strong> picks its audio input in one click.</dd>
             <dt>Ambient light or Main colors, Follow light beams</dt>
             <dd>Everything about <a href="#screen-colors">Screen colors</a>, on its own page: the two ways it colors things, light beams with their Strength, whether beams flash your lights, and what Barbeat is watching right now.</dd>
           </dl>
@@ -412,6 +423,8 @@
         <dd>Pick a style.</dd>
         <dt><code>barbeat://screen-colors/on</code> · <code>barbeat://lights/off</code> · <code>barbeat://voice/toggle</code></dt>
         <dd>Screen colors, Lights or Voice on, off or toggled.</dd>
+        <dt><code>barbeat://watch/camera</code> · <code>barbeat://watch/screen</code></dt>
+        <dd>Have Screen colors and the kaleidoscope watch the camera or capture device you chose, or the screen.</dd>
         <dt><code>barbeat://sleep/30</code> · <code>barbeat://sleep/off</code></dt>
         <dd>Start the lights' sleep timer (minutes), or cancel it.</dd>
         <dt><code>barbeat://settings/lights</code></dt>

@@ -5,5 +5,8 @@
     <!-- Hardened runtime: allow audio input so the system-audio tap keeps working. -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
+    <!-- A camera or capture device as the picture source (Screen colors › What it watches). -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
 </dict>
 </plist>

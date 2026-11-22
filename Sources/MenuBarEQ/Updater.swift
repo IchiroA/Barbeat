@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import AppKit
 import Combine
 import Security
@@ -70,6 +71,7 @@ final class Updater: ObservableObject {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in self?.checkIfDue() }
         timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in self?.checkIfDue() }
+        timer?.tolerance = 600
     }
 
     private func checkIfDue() {
@@ -86,6 +88,7 @@ final class Updater: ObservableObject {
         state = .checking
         var request = URLRequest(url: feedOverride ?? Self.feed, timeoutInterval: 20)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("Barbeat/\(Self.currentVersion) (macOS; \(Credits.handle))", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async { self?.handle(data: data, response: response, error: error, manual: manual) }
         }.resume()

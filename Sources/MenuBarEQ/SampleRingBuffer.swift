@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import Foundation
 import CoreAudio
 import os
@@ -111,15 +112,19 @@ final class SampleRingBuffer {
         return (count, written &- UInt64(count))
     }
 
+    /// Seconds per tick of `mach_absolute_time`, looked up once.
+    private static let secondsPerTick: Double = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return Double(info.numer) / Double(info.denom) / 1_000_000_000
+    }()
+
     /// Seconds since the audio thread last delivered samples.
     var secondsSinceLastWrite: Double {
         os_unfair_lock_lock(lock)
         let last = lastWrite
         os_unfair_lock_unlock(lock)
         guard last != 0 else { return .infinity }
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        let elapsed = mach_absolute_time() &- last
-        return Double(elapsed) * Double(info.numer) / Double(info.denom) / 1_000_000_000
+        return Double(mach_absolute_time() &- last) * Self.secondsPerTick
     }
 }

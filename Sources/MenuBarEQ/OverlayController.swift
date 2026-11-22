@@ -1,3 +1,4 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import AppKit
 import Combine
 import QuartzCore
@@ -37,6 +38,10 @@ final class OverlayController: NSObject {
     private var menuBarHeights: [CGDirectDisplayID: CGFloat] = [:]
     /// On battery the visuals draw at 30 fps instead of 60, to save power.
     private let power = PowerSource()
+    /// Nothing has moved or played for a couple of seconds: the loop runs at 15 frames a second instead, and the
+    /// first sound brings it straight back. (Not while the kaleidoscope shows: it redraws every frame.)
+    private var resting = false
+    private var restingSince: CFTimeInterval = 0
     /// The waterfall scrolls one column per 1/60 s whatever the frame rate.
     private var waterfallClock: Double = 0
     /// Keeps the lights going when the display sleeps (the display link stops then).
@@ -84,6 +89,9 @@ final class OverlayController: NSObject {
             print("playing now: " + (playing.isEmpty ? "nothing" : playing.joined(separator: ", ")))
             let mic = AVCaptureDevice.authorizationStatus(for: .audio)
             print("microphone permission: " + [.authorized: "allowed", .denied: "denied", .restricted: "restricted"][mic, default: "not asked yet"])
+            print("cameras: " + CameraList.describeAll())
+            let cam = AVCaptureDevice.authorizationStatus(for: .video)
+            print("camera permission: " + [.authorized: "allowed", .denied: "denied", .restricted: "restricted"][cam, default: "not asked yet"])
         }
 
         settings.$enabled.dropFirst().receive(on: RunLoop.main)
@@ -103,6 +111,10 @@ final class OverlayController: NSObject {
         settings.$fullScreenStrip.dropFirst().removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildWindows() }.store(in: &cancellables)
         settings.$screenColors.combineLatest(settings.$audioSource, settings.$sourceAppID)
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateScreenWatching() }.store(in: &cancellables)
+        settings.$pictureSource.combineLatest(settings.$cameraUID)
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateScreenWatching() }.store(in: &cancellables)
@@ -162,12 +174,12 @@ final class OverlayController: NSObject {
                 tap.start()
             }
             startDisplayLink()
-            startLightsTimer()
+            // The lights have their own timer only while they're on (it keeps them going when the display sleeps).
+            if lights.isActive { startLightsTimer() } else { stopLightsTimer() }
         } else {
             tap.stop()
             stopDisplayLink()
-            lightsTimer?.invalidate()
-            lightsTimer = nil
+            stopLightsTimer()
             status.state = .off
         }
         if settings.enabled {
@@ -398,7 +410,7 @@ final class OverlayController: NSObject {
         var displays = on ? Set((windows + edgeWindows).compactMap { $0.screen?.displayID }) : []
         if on, lights.isActive, displays.isEmpty, let main = NSScreen.screens.first?.displayID { displays.insert(main) }
         let app = settings.audioSource == .app && !settings.sourceAppID.isEmpty ? settings.sourceAppID : nil
-        ScreenColors.shared.watch(displays: displays, followingApp: app)
+        ScreenColors.shared.watch(displays: displays, followingApp: app, camera: PictureChoice.camera(settings: settings))
     }
 
     // MARK: - Render loop
@@ -409,17 +421,43 @@ final class OverlayController: NSObject {
         link.add(to: .main, forMode: .common)
         displayLink = link
         lastTimestamp = 0
+        resting = false
+        restingSince = 0
         applyFrameRate()
     }
 
-    /// 60 fps when plugged in, 30 on battery. Everything that moves is timed in seconds, so only smoothness changes.
+    /// 60 fps when plugged in, 30 on battery, 15 while resting. Everything that moves is timed in seconds, so only
+    /// smoothness changes.
     private func applyFrameRate() {
-        displayLink?.preferredFrameRateRange = power.onBattery
-            ? CAFrameRateRange(minimum: 24, maximum: 30, preferred: 30)
-            : CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
-        if verbose { print("frame rate: \(power.onBattery ? "30 fps (on battery)" : "60 fps")") }
+        let range: CAFrameRateRange
+        if resting {
+            range = CAFrameRateRange(minimum: 10, maximum: 15, preferred: 15)
+        } else if power.onBattery {
+            range = CAFrameRateRange(minimum: 24, maximum: 30, preferred: 30)
+        } else {
+            range = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        }
+        displayLink?.preferredFrameRateRange = range
+        if verbose { print("frame rate: \(Int(range.preferred ?? range.maximum)) fps\(resting ? " (resting)" : power.onBattery ? " (on battery)" : "")") }
         kaleidoscope.onBattery = power.onBattery
         updateScreenCapture()
+    }
+
+    /// Slows the loop down after two quiet seconds, and speeds it up the moment something moves.
+    private func updateRest(atRest: Bool, now: CFTimeInterval) {
+        let canRest = atRest && !kaleidoscope.running
+        if !canRest {
+            restingSince = 0
+            if resting {
+                resting = false
+                applyFrameRate()
+            }
+        } else if restingSince == 0 {
+            restingSince = now
+        } else if !resting, now - restingSince > 2 {
+            resting = true
+            applyFrameRate()
+        }
     }
 
     /// Light beams need quicker screen frames (fewer on battery).
@@ -438,8 +476,14 @@ final class OverlayController: NSObject {
             guard let self, self.lights.isActive, CACurrentMediaTime() - self.lastStep > 0.2 else { return }
             self.advance(now: CACurrentMediaTime())
         }
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         lightsTimer = timer
+    }
+
+    private func stopLightsTimer() {
+        lightsTimer?.invalidate()
+        lightsTimer = nil
     }
 
     @objc private func step(_ link: CADisplayLink) {
@@ -537,6 +581,7 @@ final class OverlayController: NSObject {
         let voiceShowing = VoiceFrame.current.tint > 0.002 || VoiceFrame.current.glow > 0.002
         let atRest = analyzer.isAtRest && sparks.isEmpty && (style != .waterfall || history?.isEmpty ?? true) && !beams
             && !voiceShowing
+        updateRest(atRest: atRest, now: lastStep)
         if atRest && wasAtRest { return }
         wasAtRest = atRest
         redraw()

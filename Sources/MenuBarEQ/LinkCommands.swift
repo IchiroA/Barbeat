@@ -1,3 +1,4 @@
+// Part of Barbeat, by Ichiro Ashihara (@IchiroA). MIT License.
 import Foundation
 
 /// `barbeat://` links, for Shortcuts ("Open URL"), Stream Deck, Raycast or a browser:
@@ -6,6 +7,7 @@ import Foundation
 ///     barbeat://scene/Concert
 ///     barbeat://style/center
 ///     barbeat://screen-colors/on|off|toggle   barbeat://lights/on|off|toggle   barbeat://voice/on|off|toggle
+///     barbeat://watch/screen   ·   barbeat://watch/camera   (what Screen colors and the kaleidoscope watch)
 ///     barbeat://sleep/30   (minutes)   ·   barbeat://sleep/off
 ///     barbeat://settings   ·   barbeat://settings/lights
 enum LinkCommands {
@@ -39,6 +41,12 @@ enum LinkCommands {
         case "screen-colors":
             guard let on = flip(settings.screenColors) else { return false }
             if on { ScreenColorsAccess.turnOn(settings) } else { settings.screenColors = false }
+        case "watch":
+            switch argument.lowercased() {
+            case "screen": settings.pictureSource = .screen
+            case "camera": CameraAccess.chooseCamera(settings)
+            default: return false
+            }
         case "lights":
             guard let on = flip(LightSettings.shared.enabled) else { return false }
             LightSettings.shared.enabled = on

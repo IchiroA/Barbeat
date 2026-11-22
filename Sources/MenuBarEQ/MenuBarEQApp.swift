@@ -1,3 +1,4 @@
+// Barbeat, a light show for the Mac's menu bar · @IchiroA · MIT License
 import SwiftUI
 import AppKit
 
@@ -40,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `--demo` animates a built-in test signal instead of listening to system audio.
         let demo = CommandLine.arguments.contains("--demo")
         setlinebuf(stdout) // so --verbose / --snapshot output shows up immediately in log files
+        if CommandLine.arguments.contains("--verbose") {
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            print("Barbeat \(Credits.version) (build \(build)) · \(Credits.author) · \(Credits.handle)")
+        }
         controller = OverlayController(settings: .shared, status: .shared, demo: demo)
         controller?.start()
 

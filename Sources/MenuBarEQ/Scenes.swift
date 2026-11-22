@@ -1,5 +1,7 @@
+// Barbeat · Ichiro Ashihara (@IchiroA) · MIT License
 import SwiftUI
 import AppKit
+import AVFoundation
 
 /// The groups of settings a scene can set. Each scene can leave groups out, and those stay as they are.
 enum ScenePart: String, CaseIterable, Identifiable, Codable {
@@ -36,7 +38,7 @@ enum ScenePart: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .visuals: return "Visuals on or off, the style, layout, number of bars, peak hold and spark power"
         case .colors: return "The palette, your Custom colors and color drift"
-        case .screen: return "Screen colors on or off, Ambient light or Main colors, following light beams, their strength, and flashing your lights"
+        case .screen: return "Screen colors on or off, what it watches (the screen or a camera), Ambient light or Main colors, following light beams, their strength, and flashing your lights"
         case .glow: return "Brightness, opacity, readable menu bar text, the edge glow (depth and top edge), all displays and full screen"
         case .source: return "What Barbeat listens to: system audio, one app or an input"
         case .sound: return "Sensitivity, auto level, and low, mid and high"
@@ -65,6 +67,8 @@ struct SceneLook: Codable, Equatable {
     // Screen colors
     var screenColors: Bool?, screenColorMode: String?, screenBeams: Bool?, screenBeamStrength: Double?
     var screenBeamsToLights: Bool?
+    /// What it watches: "screen" or "camera", and the camera by ID (with its name, for the file and while it's away).
+    var pictureSource: String?, cameraUID: String?, cameraName: String?
     // Brightness and glow
     var brightness: Double?, opacity: Double?, readableMenuBar: Bool?
     var edgeGlow: Bool?, edgeGlowDepth: Double?, edgeGlowTop: Bool?
@@ -96,6 +100,7 @@ struct SceneLook: Codable, Equatable {
         palette = v(.palette); customGradient = v(.customGradient); colorDrift = v(.colorDrift)
         screenColors = v(.screenColors); screenColorMode = v(.screenColorMode); screenBeams = v(.screenBeams)
         screenBeamStrength = v(.screenBeamStrength); screenBeamsToLights = v(.screenBeamsToLights)
+        pictureSource = v(.pictureSource); cameraUID = v(.cameraUID); cameraName = v(.cameraName)
         brightness = v(.brightness); opacity = v(.opacity); readableMenuBar = v(.readableMenuBar)
         edgeGlow = v(.edgeGlow); edgeGlowDepth = v(.edgeGlowDepth); edgeGlowTop = v(.edgeGlowTop)
         edgeGlowSides = v(.edgeGlowSides)
@@ -132,6 +137,9 @@ struct SceneLook: Codable, Equatable {
         look.screenBeams = s.screenBeams
         look.screenBeamStrength = s.screenBeamStrength
         look.screenBeamsToLights = s.screenBeamsToLights
+        look.pictureSource = s.pictureSource.rawValue
+        look.cameraUID = s.pictureSource == .camera ? s.cameraUID : nil
+        look.cameraName = s.pictureSource == .camera ? s.cameraName : nil
 
         look.brightness = s.brightness
         look.opacity = s.opacity
@@ -237,6 +245,19 @@ struct SceneLook: Codable, Equatable {
         put(screenBeams, s, \.screenBeams)
         put(screenBeamStrength, s, \.screenBeamStrength)
         put(screenBeamsToLights, s, \.screenBeamsToLights)
+        // The camera before the choice, so capture switches straight to the right one. A camera without
+        // permission yet is only asked for by hand (never from an automatic switch).
+        if let cameraUID, !cameraUID.isEmpty {
+            put(cameraName ?? cameraUID, s, \.cameraName)
+            put(cameraUID, s, \.cameraUID)
+        }
+        if let picture = pictureSource.flatMap(PictureSource.init(rawValue:)), picture != s.pictureSource {
+            if picture == .screen || AVCaptureDevice.authorizationStatus(for: .video) == .authorized {
+                s.pictureSource = picture
+            } else if interactive {
+                CameraAccess.chooseCamera(s)
+            }
+        }
 
         put(brightness, s, \.brightness)
         put(opacity, s, \.opacity)
@@ -320,6 +341,7 @@ struct SceneLook: Codable, Equatable {
         case .screen:
             screenColors = o.screenColors; screenColorMode = o.screenColorMode; screenBeams = o.screenBeams
             screenBeamStrength = o.screenBeamStrength; screenBeamsToLights = o.screenBeamsToLights
+            pictureSource = o.pictureSource; cameraUID = o.cameraUID; cameraName = o.cameraName
         case .glow:
             brightness = o.brightness; opacity = o.opacity; readableMenuBar = o.readableMenuBar
             edgeGlow = o.edgeGlow; edgeGlowDepth = o.edgeGlowDepth; edgeGlowTop = o.edgeGlowTop
@@ -375,6 +397,7 @@ struct SceneLook: Codable, Equatable {
         mine.lightDevices = nil
         mine.sourceAppName = nil
         mine.sourceDeviceName = nil
+        mine.cameraName = nil
         guard let a = mine.dictionary, let b = now.dictionary else { return false }
         for (key, value) in a {
             guard let other = b[key], (value as AnyObject).isEqual(other) else { return false }
@@ -395,6 +418,7 @@ struct SceneLook: Codable, Equatable {
         if screenColors == true {
             parts.append(screenColorMode.flatMap(ScreenColorMode.init(rawValue:)).map { "Screen colors (\($0.title))" }
                 ?? "Screen colors")
+            if pictureSource == PictureSource.camera.rawValue { parts.append("from \(cameraName ?? "a camera")") }
             if screenBeams == true { parts.append("light beams") }
         } else if let palette = palette.flatMap(Palette.init(rawValue:)), palette != .screen {
             parts.append(colorDrift.flatMap(ColorDrift.init(rawValue:)).map { $0 == .off ? palette.title : "\(palette.title), drifting" }
@@ -762,6 +786,7 @@ final class SceneStore: ObservableObject {
             defaults.removeObject(forKey: Key.restore)
         }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.evaluate() }
+        timer?.tolerance = 0.3
     }
 
     private func evaluate() {
@@ -769,11 +794,11 @@ final class SceneStore: ObservableObject {
             if automaticID != nil { endAutomatic() }
             return
         }
-        let processes = HAL.audioProcesses()
         let own = ProcessInfo.processInfo.processIdentifier
         let settings = Settings.shared
         var onCall = HAL.microphoneInUse(except: settings.audioSource == .device ? settings.sourceDeviceUID : nil)
-        let playing = processes.filter { $0.isPlaying && $0.pid != own }
+        // Which apps play only matters when a scene is tied to an app.
+        let playing = scenes.contains { !$0.apps.isEmpty } ? HAL.audioProcesses().filter { $0.isPlaying && $0.pid != own } : []
         var pretendApp: String?
         if let p = Self.pretend, (p.from...p.to).contains(CACurrentMediaTime() - launched) {
             if p.what == "call" { onCall = true } else { pretendApp = p.what }
