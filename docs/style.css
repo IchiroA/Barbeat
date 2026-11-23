@@ -163,6 +163,10 @@ details > div p:last-child { margin-bottom: 0; }
 
 /* Support */
 .support { text-align: center; }
+/* The Mac App Store version's Help link adds ?from=appstore (see the script at the end of index.html). */
+.appstore-only { display: none; }
+.from-appstore .appstore-only { display: inline-flex; }
+.from-appstore .not-appstore { display: none; }
 .support .lead { margin: 0 auto 26px; }
 .heart { color: var(--pink); }
 

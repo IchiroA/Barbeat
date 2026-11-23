@@ -298,7 +298,7 @@
           <p class="group-title">General</p>
           <dl>
             <dt>Starting up, updates</dt>
-            <dd>Open Barbeat when you log in, let the menu bar icon move with the music, and check for updates automatically (about once a day, on GitHub). When there's a new version, Barbeat asks first, then installs it and restarts by itself.</dd>
+            <dd>Open Barbeat when you log in, let the menu bar icon move with the music, and check for updates automatically (about once a day, on GitHub). When there's a new version, Barbeat asks first, then installs it and restarts by itself. The Mac App Store version gets its updates from the App Store and has the tip jar here instead.</dd>
           </dl>
         </div>
       </div>
@@ -514,7 +514,8 @@
       <h2>Enjoying Barbeat? <span class="heart">♥</span></h2>
       <p class="lead">Barbeat is free and open source, made by one person. If it makes your music a little brighter, you can help keep it going.</p>
       <div class="buttons">
-        <a class="button primary" id="tip" href="https://ko-fi.com/ichiroa">Leave a tip on Ko-fi</a>
+        <a class="button primary not-appstore" id="tip" href="https://ko-fi.com/ichiroa">Leave a tip on Ko-fi</a>
+        <a class="button primary appstore-only" href="barbeat://settings/general">Open the Tip Jar in Barbeat</a>
         <a class="button" href="https://github.com/IchiroA/Barbeat">Star it on GitHub</a>
         <a class="button" href="https://github.com/IchiroA/Barbeat/issues">Report a bug or idea</a>
       </div>
@@ -535,5 +536,9 @@
   </div>
 </footer>
 
+<script>
+  // Barbeat from the Mac App Store opens this guide with ?from=appstore: tips go through its own tip jar there.
+  if (new URLSearchParams(location.search).get("from") === "appstore") document.documentElement.classList.add("from-appstore");
+</script>
 </body>
 </html>

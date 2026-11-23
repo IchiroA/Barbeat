@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Barbeat · Privacy</title>
-  <meta name="description" content="Barbeat's privacy policy: it collects no data. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent. It checks GitHub for updates once a day.">
+  <meta name="description" content="Barbeat's privacy policy: it collects no data. Sound and screen frames are analyzed live on your Mac and never recorded, saved or sent. The GitHub download checks for updates once a day; the Mac App Store version leaves updates to the App Store.">
   <link rel="canonical" href="https://ichiroa.github.io/Barbeat/privacy.html">
   <link rel="icon" href="images/icon.png">
   <link rel="stylesheet" href="style.css">
@@ -29,7 +29,7 @@
     <p class="muted">Effective November 22, 2026</p>
 
     <div class="summary-box">
-      <p><strong>Barbeat collects no data.</strong> There are no accounts, analytics, ads or tracking. Sound, screen frames and camera frames are analyzed live on your Mac and never recorded, saved or sent anywhere. The only network traffic goes to lights you set up yourself, on your own network, and a once-a-day check for a newer version on GitHub (which you can turn off).</p>
+      <p><strong>Barbeat collects no data.</strong> There are no accounts, analytics, ads or tracking. Sound, screen frames and camera frames are analyzed live on your Mac and never recorded, saved or sent anywhere. The only network traffic goes to lights you set up yourself, on your own network, and, in the version downloaded from GitHub, a once-a-day check for a newer version (which you can turn off). This policy covers both the GitHub download and the Mac App Store version.</p>
     </div>
 
     <h2>Sound</h2>
@@ -59,11 +59,15 @@
     <p>If you set up lights, Barbeat talks to your Philips Hue Bridge and Art-Net devices (such as WLED) directly over your local network. To find a Hue Bridge, it looks on your local network and may also ask Philips' public discovery service (<code>discovery.meethue.com</code>), which lists bridges registered from your internet connection. That request includes no information about you beyond what any web request does (your IP address); Philips' own privacy policy covers it. macOS asks for Local Network permission the first time.</p>
 
     <h2>Updates</h2>
-    <p>About once a day Barbeat asks GitHub (<code>api.github.com</code>) for its latest release, to tell you when there's a newer version. Like any web request, this shows GitHub your IP address; it sends nothing else about you, and GitHub's own privacy policy covers it. If you choose to update, Barbeat downloads the new version from GitHub and installs it only if it's signed by its developer and notarized by Apple. You can turn the daily check off in the update dialog.</p>
+    <p>The Mac App Store version gets its updates from the App Store and never checks for or downloads updates itself.</p>
+    <p>The version downloaded from GitHub: about once a day Barbeat asks GitHub (<code>api.github.com</code>) for its latest release, to tell you when there's a newer version. Like any web request, this shows GitHub your IP address; it sends nothing else about you, and GitHub's own privacy policy covers it. If you choose to update, Barbeat downloads the new version from GitHub and installs it only if it's signed by its developer and notarized by Apple. You can turn the daily check off in the update dialog.</p>
+
+    <h2>Tips (Mac App Store version)</h2>
+    <p>The Mac App Store version has an optional tip jar. Tips are in-app purchases handled entirely by Apple: Barbeat never sees your payment details or your Apple Account, and a tip doesn't unlock anything. To say thank you, Barbeat keeps a count of the tips left on your Mac in its own settings; it never sends it anywhere. Apple's privacy policy covers the purchase itself.</p>
 
     <h2>What's stored on your Mac</h2>
     <ul>
-      <li>Your settings, in macOS's preferences for Barbeat.</li>
+      <li>Your settings, in macOS's preferences for Barbeat (in the Mac App Store version, inside its sandbox container), including the number of tips you've left.</li>
       <li>Hue pairing keys, in your login keychain.</li>
       <li>While Barbeat controls Hue lights: a note of how the lights were set, in Barbeat's Application Support folder, so they can be put back even after a crash. It's removed once they're restored.</li>
     </ul>
